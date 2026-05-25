@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLA Dashboard — Monitoreo CE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0d11;
+  --bg2: #13161d;
+  --bg3: #1a1e28;
+  --bg4: #222738;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text: #e8eaf0;
+  --text2: #8b90a0;
+  --text3: #555b6e;
+  --accent: #4f9eff;
+  --accent2: #1a5fc8;
+  --green: #22c55e;
+  --green-bg: rgba(34,197,94,0.1);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.1);
+  --red: #ef4444;
+  --red-bg: rgba(239,68,68,0.1);
+  --mon: #818cf8;
+  --mon-bg: rgba(129,140,248,0.12);
+  --inc: #34d399;
+  --inc-bg: rgba(52,211,153,0.12);
+  --radius: 12px;
+  --radius-sm: 7px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* GRID NOISE BACKGROUND */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(79,158,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,158,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* SIDEBAR */
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 220px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  padding: 0;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.sidebar-logo .subtitle {
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 2px;
+  font-family: 'DM Mono', monospace;
+}
+.nav-section {
+  padding: 16px 12px 8px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  margin: 1px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 400;
+  transition: all 0.15s;
+  border: none;
+  background: none;
+  width: calc(100% - 16px);
+  text-align: left;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active {
+  background: var(--mon-bg);
+  color: var(--mon);
+  font-weight: 500;
+}
+.nav-item .icon { width: 16px; height: 16px; flex-shrink: 0; }
+.sidebar-bottom {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.source-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+}
+.source-pill.mon { background: var(--mon-bg); color: var(--mon); }
+.source-pill.inc { background: var(--inc-bg); color: var(--inc); }
+.source-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.source-pill .dot.blink { animation: blink 1.5s infinite; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+/* MAIN */
+.main {
+  margin-left: 220px;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(11,13,17,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+}
+.topbar-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+}
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.refresh-btn:hover { background: var(--bg4); color: var(--text); border-color: var(--accent); }
+.refresh-btn svg { width: 14px; height: 14px; }
+
+/* SECTIONS */
+.section { display: none; padding: 28px 32px; }
+.section.active { display: block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+/* STAT CARDS */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border2); }
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--card-accent, var(--accent)), transparent);
+  opacity: 0.6;
+}
+.stat-card .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  margin-bottom: 8px;
+}
+.stat-card .value {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.stat-card .sub {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 5px;
+  font-family: 'DM Mono', monospace;
+}
+.stat-card.accent-green { --card-accent: var(--green); }
+.stat-card.accent-amber { --card-accent: var(--amber); }
+.stat-card.accent-red   { --card-accent: var(--red); }
+.stat-card.accent-mon   { --card-accent: var(--mon); }
+.stat-card.accent-inc   { --card-accent: var(--inc); }
+
+/* SECTION HEADER */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap; gap: 10px;
+}
+.section-header h2 {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filters label { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
+select {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+}
+select:focus { border-color: var(--accent); }
+
+/* TABLE */
+.table-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+table { width: 100%; border-collapse: collapse; }
+thead { background: var(--bg3); }
+th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background 0.1s; }
+tbody tr:hover { background: var(--bg3); }
+
+/* BADGES */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'DM Mono', monospace;
+}
+.badge.ok  { background: var(--green-bg); color: var(--green); }
+.badge.warn{ background: var(--amber-bg); color: var(--amber); }
+.badge.bad { background: var(--red-bg); color: var(--red); }
+.badge.nd  { background: var(--bg4); color: var(--text3); }
+.badge.mon { background: var(--mon-bg); color: var(--mon); }
+.badge.inc { background: var(--inc-bg); color: var(--inc); }
+
+/* BAR */
+.bar-wrap { display: flex; align-items: center; gap: 8px; }
+.bar-bg { flex: 1; height: 5px; background: var(--bg4); border-radius: 3px; min-width: 60px; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+.bar-label { font-size: 11px; color: var(--text2); min-width: 34px; font-family: 'DM Mono', monospace; }
+
+/* DIVIDER */
+.divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+/* LOADING / ERROR */
+.loader-wrap { padding: 48px; text-align: center; color: var(--text3); }
+.spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box {
+  background: var(--red-bg);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  color: var(--red);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* TAG bloque */
+.bloque-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.bloque-B1 { background: rgba(79,158,255,0.12); color: var(--accent); }
+.bloque-B2 { background: rgba(129,140,248,0.12); color: var(--mon); }
+
+/* CHART CONTAINER */
+.chart-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.chart-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 16px;
+}
+.chart-inner { position: relative; width: 100%; }
+
+/* RESUMEN COMBINADO layout */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media(max-width:900px) { .two-col { grid-template-columns: 1fr; } }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="title">SLA Center</div>
+    <div class="subtitle">Monitoreo CE</div>
+  </div>
+
+  <div class="nav-section">Vistas</div>
+  <button class="nav-item active" onclick="showSection('resumen', this)">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Resumen combinado
+  </button>
+  <button class="nav-item" onclick="showSection('monitoreo', this)">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    SLA Monitoreo
+  </button>
+  <button class="nav-item" onclick="showSection('incidencias', this)">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+    SLA Incidencias
+  </button>
+  <button class="nav-item" onclick="showSection('detalle', this)">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Detalle de casos
+  </button>
+
+  <div class="sidebar-bottom">
+    <div class="source-pill mon"><div class="dot blink"></div>Monitoreo (hoja SLA)</div>
+    <div class="source-pill inc"><div class="dot blink"></div>Incidencias (Script)</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="page-title">Resumen combinado</div>
+      <div class="topbar-meta" id="last-update">Cargando datos...</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="filters">
+        <label>Bloque</label>
+        <select id="global-bloque" onchange="onGlobalBloque()">
+          <option value="all">B1 + B2</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+        </select>
+      </div>
+      <button class="refresh-btn" onclick="loadAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.4"/></svg>
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- RESUMEN -->
+  <section class="section active" id="sec-resumen">
+    <div id="resumen-cards" class="cards-grid">
+      <div class="stat-card"><div class="loader-wrap"><div class="spinner"></div></div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-wrap">
+        <div class="chart-title">% SLA por tipo — Monitoreo</div>
+        <div class="chart-inner" style="height:220px"><canvas id="chartMon" role="img" aria-label="SLA por tipo Monitoreo"></canvas></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">% SLA por tipo — Incidencias</div>
+        <div class="chart-inner" style="height:220px"><canvas id="chartInc" role="img" aria-label="SLA por tipo Incidencias"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-header"><h2>Tabla comparativa por tipo</h2></div>
+    <div class="table-wrap" id="tabla-resumen"><div class="loader-wrap"><div class="spinner"></div><p>Cargando...</p></div></div>
+  </section>
+
+  <!-- MONITOREO -->
+  <section class="section" id="sec-monitoreo">
+    <div class="section-header">
+      <h2>SLA Monitoreo — Hoja SLA (B1 / B2)</h2>
+      <div class="filters">
+        <label>Tipo</label>
+        <select id="mon-tipo" onchange="renderMonitoreo()"><option value="all">Todos</option></select>
+        <label>Estado</label>
+        <select id="mon-estado" onchange="renderMonitoreo()">
+          <option value="all">Todos</option>
+          <option value="cerrado">Cerrado</option>
+          <option value="abierto">Abierto</option>
+        </select>
+      </div>
+    </div>
+    <div id="mon-cards" class="cards-grid"></div>
+    <div class="table-wrap" id="tabla-mon"><div class="loader-wrap"><div class="spinner"></div></div></div>
+  </section>
+
+  <!-- INCIDENCIAS -->
+  <section class="section" id="sec-incidencias">
+    <div class="section-header">
+      <h2>SLA Incidencias — Apps Script</h2>
+      <div class="filters">
+        <label>Tipo</label>
+        <select id="inc-tipo" onchange="renderIncidencias()"><option value="all">Todos</option></select>
+      </div>
+    </div>
+    <div id="inc-cards" class="cards-grid"></div>
+    <div class="table-wrap" id="tabla-inc"><div class="loader-wrap"><div class="spinner"></div></div></div>
+  </section>
+
+  <!-- DETALLE -->
+  <section class="section" id="sec-detalle">
+    <div class="section-header">
+      <h2>Detalle de casos — Monitoreo</h2>
+      <div class="filters">
+        <label>Monitor</label>
+        <select id="det-monitor" onchange="renderDetalle()"><option value="all">Todos</option></select>
+        <label>Estado</label>
+        <select id="det-estado" onchange="renderDetalle()">
+          <option value="all">Todos</option>
+          <option value="cerrado">Cerrado</option>
+          <option value="abierto">Abierto</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap" id="tabla-detalle"><div class="loader-wrap"><div class="spinner"></div></div></div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const URL_MON = 'https://script.google.com/macros/s/AKfycbx3FbzfNY9Cnqy6U5wjEobSApFRX9WC9Y__ZUFfihNdoQnQzjLz5IakqTxP84KTCPY/exec';
+const URL_INC = 'https://script.google.com/macros/s/AKfycbzYkS6QUFYIQNHzLQLmKZ85ccfMYWXNPrvsw0dKX62k33c0IGVHD64ybDo2z8SSbzOWJA/exec'; // Pegá aquí la URL del script de incidencias cuando lo publiques
+
+const SLA_IDEAL = {
+  'apoyo a usuario': 3,
+  'limite de sesiones alcanzado': 3,
+  'reconfiguracion lan (mined)': 4,
+  'corte de fibra optica': 48,
+  'reconfiguracion wan (isp)': 48,
+  'cambio de equipos (mined)': 12,
+  'cambio de equipos (isp)': 48,
+};
+
+let RAW_MON = [], RAW_INC = [];
+let chartMonInst = null, chartIncInst = null;
+
+// ── UTILS ───────────────────────────────────────────────────────────────────
+const norm = s => !s ? '' : s.toLowerCase().trim()
+  .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i')
+  .replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
+
+function parseDur(s) {
+  if (!s) return 0;
+  s = String(s).trim();
+  let m = s.match(/(\d+)\s*h\s*(\d+)\s*min/i);
+  if (m) return +m[1] + +m[2]/60;
+  m = s.match(/^(\d+(?:\.\d+)?)\s*h$/i);
+  if (m) return parseFloat(m[1]);
+  m = s.match(/^(\d+)\s*min$/i);
+  if (m) return +m[1]/60;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function pctBadge(p) {
+  if (p === null || p === undefined) return '<span class="badge nd">S/D</span>';
+  if (p >= 80) return `<span class="badge ok">${p}%</span>`;
+  if (p >= 50) return `<span class="badge warn">${p}%</span>`;
+  return `<span class="badge bad">${p}%</span>`;
+}
+
+function barHtml(p, showBadge = false) {
+  const pv = p ?? 0;
+  let col = '#555b6e';
+  if (p !== null) col = p >= 80 ? '#22c55e' : p >= 50 ? '#f59e0b' : '#ef4444';
+  const badge = showBadge ? pctBadge(p) : `<span class="bar-label">${p !== null ? p+'%' : '—'}</span>`;
+  return `<div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:${pv}%;background:${col}"></div></div>${badge}</div>`;
+}
+
+function statCard(label, value, sub = '', accentClass = '') {
+  return `<div class="stat-card ${accentClass}">
+    <div class="label">${label}</div>
+    <div class="value">${value}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+function fmtFecha(iso) {
+  if (!iso) return '—';
+  return iso.substring(0, 10);
+}
+
+// ── NAV ─────────────────────────────────────────────────────────────────────
+const titles = { resumen:'Resumen combinado', monitoreo:'SLA Monitoreo', incidencias:'SLA Incidencias', detalle:'Detalle de casos' };
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('page-title').textContent = titles[id];
+}
+
+function onGlobalBloque() { renderMonitoreo(); renderResumen(); }
+
+// ── DATA LOAD ────────────────────────────────────────────────────────────────
+async function loadAll() {
+  document.getElementById('last-update').textContent = 'Cargando...';
+  try {
+    const [rMon, rInc] = await Promise.all([
+      fetch(URL_MON).then(r => r.json()),
+      fetch(URL_INC).then(r => r.json()).catch(() => ({ tipos: [] }))
+    ]);
+
+    RAW_MON = (rMon.sla || []).filter(r => {
+      const b = (r['Bloque'] || '').trim();
+      return b === 'B1' || b === 'B2' || b === '';
+    });
+
+    RAW_INC = rInc.tipos || [];
+
+    // populate filters
+    const tipos = [...new Set(RAW_MON.map(r => r['Incidencias']).filter(Boolean))];
+    populateSelect('mon-tipo', tipos);
+
+    const tiposInc = RAW_INC.map(d => d.tipo);
+    populateSelect('inc-tipo', tiposInc);
+
+    const monitores = [...new Set(RAW_MON.map(r => r['Monitor']).filter(Boolean))].sort();
+    populateSelect('det-monitor', monitores);
+
+    renderResumen();
+    renderMonitoreo();
+    renderIncidencias();
+    renderDetalle();
+
+    document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-SV');
+  } catch(e) {
+    document.getElementById('last-update').textContent = 'Error al cargar';
+    showError('resumen-cards', e.message);
+  }
+}
+
+function populateSelect(id, values) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  values.forEach(v => { const o = document.createElement('option'); o.value = v; o.text = v; sel.appendChild(o); });
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+function showError(containerId, msg) {
+  document.getElementById(containerId).innerHTML = `<div class="error-box">Error: ${msg}<br><small>Verificá que el Apps Script tenga acceso CORS (ver instrucciones abajo).</small></div>`;
+}
+
+// ── FILTROS ──────────────────────────────────────────────────────────────────
+function getMonRows() {
+  const bloque = document.getElementById('global-bloque').value;
+  const tipo   = document.getElementById('mon-tipo')?.value || 'all';
+  const estado = document.getElementById('mon-estado')?.value || 'all';
+  return RAW_MON.filter(r => {
+    const b = (r['Bloque'] || '').trim();
+    if (bloque !== 'all' && b !== bloque) return false;
+    if (tipo   !== 'all' && (r['Incidencias']||'').trim() !== tipo) return false;
+    if (estado !== 'all' && norm(r['Estado']||'') !== estado) return false;
+    return true;
+  });
+}
+
+function getIncRows() {
+  const tipo = document.getElementById('inc-tipo')?.value || 'all';
+  return tipo === 'all' ? RAW_INC : RAW_INC.filter(d => d.tipo === tipo);
+}
+
+function calcMon(rows) {
+  let total=0,cerr=0,cumple=0,conSla=0;
+  rows.forEach(r => {
+    total++;
+    if (norm(r['Estado']||'') === 'cerrado') {
+      cerr++;
+      const tN = norm(r['Incidencias']||r['Tipo']||'');
+      const ideal = SLA_IDEAL[tN];
+      const dur = parseDur(r['Duración']);
+      if (ideal !== undefined && dur > 0) { conSla++; if (dur <= ideal) cumple++; }
+    }
+  });
+  return { total, cerrados: cerr, abiertos: total-cerr, cumple, conSla, pct: conSla>0 ? Math.round(cumple/conSla*100) : null };
+}
+
+function calcInc(rows) {
+  let total=0,cerr=0,ab=0,cumple=0,conSla=0;
+  rows.forEach(d => { total+=d.total; cerr+=d.cerrados; ab+=d.abiertos; cumple+=d.cumple; conSla+=d.conTiempo; });
+  return { total, cerrados:cerr, abiertos:ab, cumple, conSla, pct: conSla>0 ? Math.round(cumple/conSla*100) : null };
+}
+
+// ── RESUMEN ──────────────────────────────────────────────────────────────────
+function renderResumen() {
+  const monRows = getMonRows();
+  const sm = calcMon(monRows);
+  const si = calcInc(RAW_INC);
+  const totalG = sm.total + si.total;
+  const cumG   = sm.cumple + si.cumple;
+  const conG   = sm.conSla + si.conSla;
+  const pctG   = conG > 0 ? Math.round(cumG/conG*100) : null;
+
+  document.getElementById('resumen-cards').innerHTML =
+    statCard('Total casos', totalG, 'Ambas fuentes', '') +
+    statCard('SLA global', pctG !== null ? pctG+'%' : '—', `${cumG}/${conG} cumplen`, pctG >= 80 ? 'accent-green' : pctG >= 50 ? 'accent-amber' : 'accent-red') +
+    statCard('SLA Monitoreo', sm.pct !== null ? sm.pct+'%' : '—', `${sm.cumple}/${sm.conSla}`, 'accent-mon') +
+    statCard('SLA Incidencias', si.pct !== null ? si.pct+'%' : '—', `${si.cumple}/${si.conSla}`, 'accent-inc') +
+    statCard('Cerrados', sm.cerrados + si.cerrados, 'ambas fuentes') +
+    statCard('Abiertos', sm.abiertos + si.abiertos, 'en curso');
+
+  renderCharts(monRows);
+  renderTablaResumen(monRows);
+}
+
+function renderCharts(monRows) {
+  // Chart Monitoreo
+  const mapaM = {};
+  monRows.forEach(r => {
+    const t = (r['Incidencias'] || r['Tipo'] || '(Sin tipo)').trim();
+    const tN = norm(t);
+    const ideal = SLA_IDEAL[tN];
+    const dur = parseDur(r['Duración']);
+    if (!mapaM[t]) mapaM[t] = { cumple:0, con:0 };
+    if (norm(r['Estado']||'') === 'cerrado' && dur > 0 && ideal !== undefined) {
+      mapaM[t].con++;
+      if (dur <= ideal) mapaM[t].cumple++;
+    }
+  });
+  const labM = Object.keys(mapaM).filter(k => mapaM[k].con > 0).slice(0,7);
+  const datM = labM.map(k => Math.round(mapaM[k].cumple/mapaM[k].con*100));
+
+  if (chartMonInst) chartMonInst.destroy();
+  chartMonInst = new Chart(document.getElementById('chartMon'), {
+    type: 'bar',
+    data: {
+      labels: labM.map(l => l.length > 20 ? l.slice(0,18)+'…' : l),
+      datasets: [{ label: '% SLA', data: datM, backgroundColor: datM.map(v => v>=80?'rgba(34,197,94,0.7)':v>=50?'rgba(245,158,11,0.7)':'rgba(239,68,68,0.7)'), borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#555b6e', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { min: 0, max: 100, ticks: { color: '#555b6e', font: { size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
+    }
+  });
+
+  // Chart Incidencias
+  const labI = RAW_INC.filter(d => d.conTiempo > 0).map(d => d.tipo.length>20?d.tipo.slice(0,18)+'…':d.tipo);
+  const datI = RAW_INC.filter(d => d.conTiempo > 0).map(d => d.slaPct ?? Math.round(d.cumple/d.conTiempo*100));
+
+  if (chartIncInst) chartIncInst.destroy();
+  chartIncInst = new Chart(document.getElementById('chartInc'), {
+    type: 'bar',
+    data: {
+      labels: labI,
+      datasets: [{ label: '% SLA', data: datI, backgroundColor: datI.map(v => v>=80?'rgba(52,211,153,0.7)':v>=50?'rgba(245,158,11,0.7)':'rgba(239,68,68,0.7)'), borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#555b6e', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { min: 0, max: 100, ticks: { color: '#555b6e', font: { size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
+    }
+  });
+}
+
+function renderTablaResumen(monRows) {
+  const mapa = {};
+
+  monRows.forEach(r => {
+    const t   = (r['Incidencias'] || r['Tipo'] || '(Sin tipo)').trim();
+    const tN  = norm(t);
+    const ideal = SLA_IDEAL[tN] ?? null;
+    const dur = parseDur(r['Duración']);
+    const cerr = norm(r['Estado']||'') === 'cerrado';
+    if (!mapa[t]) mapa[t] = { tipo:t, ideal, totalM:0, cumpleM:0, conM:0, totalI:0, cumpleI:0, conI:0 };
+    mapa[t].totalM++;
+    if (cerr && dur>0 && ideal!==null) { mapa[t].conM++; if(dur<=ideal) mapa[t].cumpleM++; }
+  });
+
+  RAW_INC.forEach(d => {
+    const t   = d.tipo;
+    const tN  = norm(t);
+    const ideal = SLA_IDEAL[tN] ?? null;
+    if (!mapa[t]) mapa[t] = { tipo:t, ideal, totalM:0, cumpleM:0, conM:0, totalI:0, cumpleI:0, conI:0 };
+    mapa[t].totalI  += d.total;
+    mapa[t].cumpleI += d.cumple;
+    mapa[t].conI    += d.conTiempo;
+  });
+
+  const filas = Object.values(mapa).sort((a,b) => (b.totalM+b.totalI)-(a.totalM+a.totalI));
+
+  let html = `<table><thead><tr>
+    <th>Tipo de incidencia</th><th>SLA ideal</th>
+    <th>Casos Mon</th><th>% SLA Mon</th>
+    <th>Casos Inc</th><th>% SLA Inc</th>
+    <th>SLA combinado</th>
+  </tr></thead><tbody>`;
+
+  filas.forEach(f => {
+    const pM = f.conM > 0 ? Math.round(f.cumpleM/f.conM*100) : null;
+    const pI = f.conI > 0 ? Math.round(f.cumpleI/f.conI*100) : null;
+    const cG = f.cumpleM + f.cumpleI, sG = f.conM + f.conI;
+    const pG = sG > 0 ? Math.round(cG/sG*100) : null;
+    html += `<tr>
+      <td style="font-weight:500;max-width:200px">${f.tipo}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3)">${f.ideal !== null ? f.ideal+'h' : '—'}</td>
+      <td>${f.totalM}</td><td>${barHtml(pM)}</td>
+      <td>${f.totalI}</td><td>${barHtml(pI)}</td>
+      <td>${pctBadge(pG)}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tabla-resumen').innerHTML = html;
+}
+
+// ── MONITOREO ────────────────────────────────────────────────────────────────
+function renderMonitoreo() {
+  const rows = getMonRows();
+  const s = calcMon(rows);
+  document.getElementById('mon-cards').innerHTML =
+    statCard('Total', s.total, '', '') +
+    statCard('Cerrados', s.cerrados, '', '') +
+    statCard('Abiertos', s.abiertos, '', '') +
+    statCard('% SLA', s.pct !== null ? s.pct+'%' : '—', `${s.cumple}/${s.conSla}`, s.pct >= 80 ? 'accent-green' : s.pct >= 50 ? 'accent-amber' : 'accent-red');
+
+  if (!rows.length) { document.getElementById('tabla-mon').innerHTML = '<div class="loader-wrap" style="padding:24px;color:var(--text3)">Sin registros para el filtro seleccionado.</div>'; return; }
+
+  // agrupar por fecha+tipo+bloque
+  const agr = {};
+  rows.forEach(r => {
+    const fecha = fmtFecha(r['Fecha']);
+    const t     = (r['Incidencias']||'(Sin tipo)').trim();
+    const b     = (r['Bloque']||'—').trim();
+    const k     = `${fecha}|${t}|${b}`;
+    const tN    = norm(t); const ideal = SLA_IDEAL[tN] ?? null;
+    const dur   = parseDur(r['Duración']);
+    const cerr  = norm(r['Estado']||'') === 'cerrado';
+    if (!agr[k]) agr[k] = { fecha, tipo:t, bloque:b, ideal, total:0, cerr:0, cumple:0, con:0 };
+    agr[k].total++;
+    if (cerr) { agr[k].cerr++; if (dur>0 && ideal!==null) { agr[k].con++; if(dur<=ideal) agr[k].cumple++; } }
+  });
+
+  const filas = Object.values(agr).sort((a,b) => b.fecha.localeCompare(a.fecha));
+
+  let html = `<table><thead><tr><th>Fecha</th><th>Bloque</th><th>Tipo</th><th>SLA ideal</th><th>Total</th><th>Cerrados</th><th>% SLA</th></tr></thead><tbody>`;
+  filas.forEach(f => {
+    const p = f.con > 0 ? Math.round(f.cumple/f.con*100) : null;
+    html += `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2)">${f.fecha}</td>
+      <td><span class="bloque-tag bloque-${f.bloque}">${f.bloque}</span></td>
+      <td>${f.tipo}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3)">${f.ideal!==null?f.ideal+'h':'—'}</td>
+      <td>${f.total}</td><td>${f.cerr}</td>
+      <td>${barHtml(p, true)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('tabla-mon').innerHTML = html;
+}
+
+// ── INCIDENCIAS ───────────────────────────────────────────────────────────────
+function renderIncidencias() {
+  const rows = getIncRows();
+  const s = calcInc(rows);
+  document.getElementById('inc-cards').innerHTML =
+    statCard('Total', s.total, 'todos B1/B2', '') +
+    statCard('Cerrados', s.cerrados, '', '') +
+    statCard('Abiertos', s.abiertos, '', '') +
+    statCard('% SLA', s.pct !== null ? s.pct+'%' : '—', `${s.cumple}/${s.conSla}`, s.pct >= 80 ? 'accent-green' : s.pct >= 50 ? 'accent-amber' : 'accent-red');
+
+  if (!rows.length) { document.getElementById('tabla-inc').innerHTML = '<div class="loader-wrap" style="padding:24px;color:var(--text3)">Sin registros.</div>'; return; }
+
+  let html = `<table><thead><tr><th>Tipo</th><th>SLA ideal</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>Cumplen</th><th>% SLA</th></tr></thead><tbody>`;
+  rows.sort((a,b) => b.total - a.total).forEach(d => {
+    const tN = norm(d.tipo); const ideal = SLA_IDEAL[tN];
+    const p  = d.conTiempo > 0 ? Math.round(d.cumple/d.conTiempo*100) : null;
+    html += `<tr>
+      <td style="font-weight:500">${d.tipo}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3)">${ideal!==undefined?ideal+'h':'—'}</td>
+      <td>${d.total}</td><td>${d.cerrados}</td><td>${d.abiertos}</td>
+      <td style="font-family:'DM Mono',monospace">${d.cumple}/${d.conTiempo}</td>
+      <td>${barHtml(p, true)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('tabla-inc').innerHTML = html;
+}
+
+// ── DETALLE ───────────────────────────────────────────────────────────────────
+function renderDetalle() {
+  const bloque  = document.getElementById('global-bloque').value;
+  const monitor = document.getElementById('det-monitor')?.value || 'all';
+  const estado  = document.getElementById('det-estado')?.value || 'all';
+
+  const rows = RAW_MON.filter(r => {
+    const b = (r['Bloque']||'').trim();
+    if (bloque !== 'all' && b !== bloque) return false;
+    if (monitor !== 'all' && (r['Monitor']||'').trim() !== monitor) return false;
+    if (estado  !== 'all' && norm(r['Estado']||'') !== estado) return false;
+    return true;
+  }).slice(0, 200);
+
+  if (!rows.length) { document.getElementById('tabla-detalle').innerHTML = '<div class="loader-wrap" style="padding:24px;color:var(--text3)">Sin registros.</div>'; return; }
+
+  let html = `<table><thead><tr><th>Fecha</th><th>Monitor</th><th>COD</th><th>Bloque</th><th>Tipo</th><th>Descripción</th><th>Duración</th><th>Estado</th><th>SLA</th></tr></thead><tbody>`;
+  rows.forEach(r => {
+    const tN    = norm(r['Incidencias']||r['Tipo']||'');
+    const ideal = SLA_IDEAL[tN];
+    const dur   = parseDur(r['Duración']);
+    const cerr  = norm(r['Estado']||'') === 'cerrado';
+    let slaTag  = '<span class="badge nd">—</span>';
+    if (cerr && dur > 0 && ideal !== undefined) {
+      slaTag = dur <= ideal ? '<span class="badge ok">Cumple</span>' : '<span class="badge bad">No cumple</span>';
+    } else if (!cerr) {
+      slaTag = '<span class="badge warn">Abierto</span>';
+    }
+    const blq = (r['Bloque']||'—').trim();
+    html += `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap;color:var(--text2)">${fmtFecha(r['Fecha'])}</td>
+      <td style="font-size:12px">${r['Monitor']||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2)">${r['COD']||'—'}</td>
+      <td><span class="bloque-tag bloque-${blq}">${blq}</span></td>
+      <td style="font-size:12px;max-width:120px">${r['Incidencias']||'—'}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r['Descripción']||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${r['Duración']||'—'}</td>
+      <td>${norm(r['Estado']||'') === 'cerrado' ? '<span class="badge inc">Cerrado</span>' : '<span class="badge warn">Abierto</span>'}</td>
+      <td>${slaTag}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('tabla-detalle').innerHTML = html;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadAll();
+</script>
+</body>
+</html>
