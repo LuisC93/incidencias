@@ -375,9 +375,13 @@ const URL_MON = 'https://script.google.com/macros/s/AKfycbzYkS6QUFYIQNHzLQLmKZ85
 const URL_INC = 'https://script.google.com/macros/s/AKfycbx3FbzfNY9Cnqy6U5wjEobSApFRX9WC9Y__ZUFfihNdoQnQzjLz5IakqTxP84KTCPY/exec?action=data';
 
 const SLA_IDEAL = {
-  'apoyo a usuario':3,'limite de sesiones alcanzado':3,
-  'reconfiguracion lan (mined)':4,'corte de fibra optica':48,
-  'reconfiguracion wan (isp)':48,'cambio de equipos (mined)':12,'cambio de equipos (isp)':48
+  'apoyo a usuario':3,
+  'reconfiguracion lan (mined)':4,
+  'limite de sesiones alcanzado':3,
+  'corte de fibra optica':48,
+  'cambio de equipos (mined)':12,
+  'reconfiguracion wan (isp)':48,
+  'cambio de equipos (isp)':48
 };
 
 let RAW_MON=[], RAW_INC=[], RAW_INC_FILAS=[], cMonI=null, cIncI=null;
@@ -631,11 +635,11 @@ function calcIncDesdeFilas(filas, desde, hasta) {
 
 const TIPO_MAP = {
   'apoyo a usuario': 'Apoyo a usuario',
-  'limite de sesiones alcanzado': 'Límite de sesiones alcanzado',
   'reconfiguracion lan (mined)': 'Reconfiguración LAN (MINED)',
+  'limite de sesiones alcanzado': 'Límite de sesiones alcanzado',
   'corte de fibra optica': 'Corte de fibra óptica',
-  'reconfiguracion wan (isp)': 'Reconfiguración WAN (ISP)',
   'cambio de equipos (mined)': 'Cambio de equipos (MINED)',
+  'reconfiguracion wan (isp)': 'Reconfiguración WAN (ISP)',
   'cambio de equipos (isp)': 'Cambio de equipos (ISP)'
 };
 
@@ -793,7 +797,11 @@ function renderMon() {
     else agr[t].abiertos++;
   });
 
-  const filas=Object.values(agr).sort((a,b)=>b.total-a.total);
+  const ORDEN=Object.keys(SLA_IDEAL);
+  const filas=Object.values(agr).sort((a,b)=>{
+    const ia=ORDEN.indexOf(norm(a.t)), ib=ORDEN.indexOf(norm(b.t));
+    return (ia===-1?99:ia)-(ib===-1?99:ib);
+  });
   if(!filas.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros con tipo SLA válido</div>';return;}
 
   let mHtml = `<table class="despega-table"><thead><tr>
@@ -846,7 +854,11 @@ function renderInc() {
   let iHtml = `<table class="despega-table"><thead><tr>
     <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
   </tr></thead><tbody>`;
-  rows.sort((a,b)=>b.total-a.total).forEach(d=>{
+  const ORDEN_I=Object.keys(SLA_IDEAL);
+  rows.sort((a,b)=>{
+    const ia=ORDEN_I.indexOf(norm(a.tipo)), ib=ORDEN_I.indexOf(norm(b.tipo));
+    return (ia===-1?99:ia)-(ib===-1?99:ib);
+  }).forEach(d=>{
     const tN=norm(d.tipo), ideal=SLA_IDEAL[tN];
     const p=d.conTiempo>0?Math.round(d.cumple/d.conTiempo*100):null;
     const promI=d.nHoras>0?fmtHoras(d.sumaHoras/d.nHoras):'—';
