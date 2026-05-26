@@ -293,21 +293,24 @@ canvas { width:100%!important; }
         <button class="date-btn active" onclick="setFechaSection('m','todo')">Todo</button>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <div class="tbl-header">
-        <span class="tbl-title">SLA Monitoreo</span>
-        <div class="filters">
-          <label>Tipo</label>
-          <select id="m-tipo" onchange="renderMon()"><option value="all">Todos</option></select>
-          <label>Estado</label>
-          <select id="m-estado" onchange="renderMon()">
-            <option value="all">Todos</option>
-            <option value="cerrado">Cerrado</option>
-            <option value="abierto">Abierto</option>
-          </select>
+    <div id="m-cards" class="cards" style="margin-bottom:16px"></div>
+    <div class="despega-wrap">
+      <div class="despega-header" style="background:linear-gradient(135deg,#1a3a6b 0%,#1e4d8c 100%)">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <span class="despega-title">SLA Monitoreo</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.6)">Tipo</label>
+            <select id="m-tipo" onchange="renderMon()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:11px;padding:3px 8px;border-radius:6px"><option value="all">Todos</option></select>
+            <label style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.6)">Estado</label>
+            <select id="m-estado" onchange="renderMon()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">
+              <option value="all">Todos</option>
+              <option value="cerrado">Cerrado</option>
+              <option value="abierto">Abierto</option>
+            </select>
+          </div>
         </div>
+        <span class="despega-date" id="m-rango">Histórico completo</span>
       </div>
-      <div id="m-cards" class="cards" style="padding:14px 18px;margin:0"></div>
       <div id="m-tabla"></div>
     </div>
   </section>
@@ -327,15 +330,18 @@ canvas { width:100%!important; }
         <button class="date-btn active" onclick="setFechaSection('i','todo')">Todo</button>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <div class="tbl-header">
-        <span class="tbl-title">SLA Incidencias</span>
-        <div class="filters">
-          <label>Tipo</label>
-          <select id="i-tipo" onchange="renderInc()"><option value="all">Todos</option></select>
+    <div id="i-cards" class="cards" style="margin-bottom:16px"></div>
+    <div class="despega-wrap">
+      <div class="despega-header" style="background:linear-gradient(135deg,#0d3d2e 0%,#0f5c40 100%)">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <span class="despega-title">SLA Incidencias</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.6)">Tipo</label>
+            <select id="i-tipo" onchange="renderInc()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:11px;padding:3px 8px;border-radius:6px"><option value="all">Todos</option></select>
+          </div>
         </div>
+        <span class="despega-date" id="i-rango">Histórico completo</span>
       </div>
-      <div id="i-cards" class="cards" style="padding:14px 18px;margin:0"></div>
       <div id="i-tabla"></div>
     </div>
   </section>
@@ -497,6 +503,7 @@ async function loadAll() {
       const slaReal = parseDur(r.sla_texto||'');
       const slaIdeal = SLA_IDEAL[tKey];
       if (slaReal <= 0) return;
+      acum[tKey].sumaHoras+=slaReal; acum[tKey].nHoras++;
       if (slaReal <= slaIdeal) acum[tKey].cumple++;
       else acum[tKey].noCumple++;
     });
@@ -507,7 +514,8 @@ async function loadAll() {
         tipo:t, label:t, total:a.total, cerrados, abiertos:a.abiertos,
         cumple:a.cumple, noCumple:a.noCumple, slaIdeal:SLA_IDEAL[t],
         slaPct: cerrados>0 ? Math.round((a.cumple/cerrados)*100) : null,
-        conTiempo: cerrados
+        conTiempo: cerrados,
+        sumaHoras: a.sumaHoras, nHoras: a.nHoras
       };
     });
 
@@ -763,6 +771,9 @@ function renderResumen() {
 function renderMon() {
   const rows=getMonRows(), s=calcMon(rows);
   const cls=p=>p===null?'':p>=80?'g':p>=50?'a':'r';
+  const {desde:mD,hasta:mH}=getFechaFiltroSection('m');
+  const mRango=mD||mH?`${mD||'...'} → ${mH||'...'}`:'— Histórico completo —';
+  if(document.getElementById('m-rango')) document.getElementById('m-rango').textContent=mRango;
   document.getElementById('m-cards').innerHTML=
     card('Total',s.total)+card('Cerrados',s.cerrados)+
     card('Abiertos',s.abiertos)+card('SLA',s.pct!==null?s.pct+'%':'—',`${s.cumple}/${s.con}`,cls(s.pct));
@@ -776,27 +787,38 @@ function renderMon() {
     if(!t) return;
     const tN=norm(t), ideal=SLA_IDEAL[tN]??null;
     const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
-    if(!agr[t]) agr[t]={t,ideal,total:0,cerr:0,abiertos:0,cumple:0,con:0};
+    if(!agr[t]) agr[t]={t,ideal,total:0,cerr:0,abiertos:0,cumple:0,con:0,suma:0};
     agr[t].total++;
-    if(cerr){agr[t].cerr++;if(dur>0&&ideal!==null){agr[t].con++;if(dur<=ideal)agr[t].cumple++;}}
+    if(cerr){agr[t].cerr++;if(dur>0&&ideal!==null){agr[t].con++;agr[t].suma+=dur;if(dur<=ideal)agr[t].cumple++;}}
     else agr[t].abiertos++;
   });
 
   const filas=Object.values(agr).sort((a,b)=>b.total-a.total);
   if(!filas.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros con tipo SLA válido</div>';return;}
 
-  let html=`<table><thead><tr><th>Tipo</th><th>SLA ideal</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>Cumplen</th><th>% SLA</th></tr></thead><tbody>`;
+  let mHtml = `<table class="despega-table"><thead><tr>
+    <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
+  </tr></thead><tbody>`;
   filas.forEach(f=>{
     const p=f.con>0?Math.round(f.cumple/f.con*100):null;
-    html+=`<tr>
-      <td style="font-weight:600">${f.t}</td>
-      <td style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${f.ideal!==null?f.ideal+'h':'—'}</td>
-      <td>${f.total}</td><td>${f.cerr}</td><td>${f.abiertos}</td>
-      <td style="font-family:'JetBrains Mono',monospace">${f.cumple}/${f.con}</td>
-      <td>${bar(p)}</td>
+    const promM=f.con>0?fmtHoras(f.suma/f.con):'—';
+    const icon=TIPO_ICONS[f.t]||'📋';
+    let cumplBadge;
+    if(p===null) cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
+    else if(p>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${p}%</span>`;
+    else if(p>=50) cumplBadge=`<span class="cumpl-badge cumpl-warn">${p}%</span>`;
+    else cumplBadge=`<span class="cumpl-badge cumpl-bad">${p}%</span>`;
+    mHtml+=`<tr>
+      <td><div class="tipo-cell"><span style="font-size:18px;margin-right:10px">${icon}</span><span style="font-weight:500">${f.t}</span></div></td>
+      <td style="font-weight:600;font-size:15px">${f.total||'—'}</td>
+      <td style="font-weight:600;font-size:15px">${f.cerr||'—'}</td>
+      <td style="font-size:14px">${f.abiertos||'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${f.ideal!==null?f.ideal+'h':'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promM}</td>
+      <td>${cumplBadge}</td>
     </tr>`;
   });
-  document.getElementById('m-tabla').innerHTML=html+'</tbody></table>';
+  document.getElementById('m-tabla').innerHTML=mHtml+'</tbody></table>';
 }
 
 // ── INCIDENCIAS ───────────────────────────────────────────────────────────────
@@ -812,25 +834,39 @@ function renderInc() {
   if(tipo!=='all') rows=rows.filter(d=>d.tipo===tipo||norm(d.tipo)===norm(tipo));
   const s=calcInc(rows);
   const cls=p=>p===null?'':p>=80?'g':p>=50?'a':'r';
+  const {desde:iD,hasta:iH}=getFechaFiltroSection('i');
+  const iRango=iD||iH?`${iD||'...'} → ${iH||'...'}`:'— Histórico completo —';
+  if(document.getElementById('i-rango')) document.getElementById('i-rango').textContent=iRango;
   document.getElementById('i-cards').innerHTML=
     card('Total',s.total,'todos B1/B2')+card('Cerrados',s.cerrados)+
     card('Abiertos',s.abiertos)+card('SLA',s.pct!==null?s.pct+'%':'—',`${s.cumple}/${s.con}`,cls(s.pct));
 
   if(!rows.length){document.getElementById('i-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
 
-  let html=`<table><thead><tr><th>Tipo</th><th>SLA ideal</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>Cumplen</th><th>% SLA</th></tr></thead><tbody>`;
+  let iHtml = `<table class="despega-table"><thead><tr>
+    <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
+  </tr></thead><tbody>`;
   rows.sort((a,b)=>b.total-a.total).forEach(d=>{
     const tN=norm(d.tipo), ideal=SLA_IDEAL[tN];
     const p=d.conTiempo>0?Math.round(d.cumple/d.conTiempo*100):null;
-    html+=`<tr>
-      <td style="font-weight:600">${d.tipo}</td>
-      <td style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${ideal!==undefined?ideal+'h':'—'}</td>
-      <td>${d.total}</td><td>${d.cerrados}</td><td>${d.abiertos}</td>
-      <td style="font-family:'JetBrains Mono',monospace">${d.cumple}/${d.conTiempo}</td>
-      <td>${bar(p)}</td>
+    const promI=d.nHoras>0?fmtHoras(d.sumaHoras/d.nHoras):'—';
+    const icon=TIPO_ICONS[d.tipo]||'📋';
+    let cumplBadge;
+    if(p===null) cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
+    else if(p>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${p}%</span>`;
+    else if(p>=50) cumplBadge=`<span class="cumpl-badge cumpl-warn">${p}%</span>`;
+    else cumplBadge=`<span class="cumpl-badge cumpl-bad">${p}%</span>`;
+    iHtml+=`<tr>
+      <td><div class="tipo-cell"><span style="font-size:18px;margin-right:10px">${icon}</span><span style="font-weight:500">${d.tipo}</span></div></td>
+      <td style="font-weight:600;font-size:15px">${d.total||'—'}</td>
+      <td style="font-weight:600;font-size:15px">${d.cerrados||'—'}</td>
+      <td style="font-size:14px">${d.abiertos||'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${ideal!==undefined?ideal+'h':'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promI}</td>
+      <td>${cumplBadge}</td>
     </tr>`;
   });
-  document.getElementById('i-tabla').innerHTML=html+'</tbody></table>';
+  document.getElementById('i-tabla').innerHTML=iHtml+'</tbody></table>';
 }
 
 // ── DETALLE ───────────────────────────────────────────────────────────────────
