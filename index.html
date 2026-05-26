@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SLA Dashboard — CE Monitoreo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1017'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%233b82f6' stroke-width='2.5'/%3E%3Cpath d='M16 10v6l4 2' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%233b82f6'/%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -348,10 +349,32 @@ canvas { width:100%!important; }
 
   <!-- DETALLE -->
   <section class="section" id="sec-detalle">
+    <div class="date-filter">
+      <label>Desde</label>
+      <input type="date" id="d-desde" onchange="renderDet()">
+      <label>Hasta</label>
+      <input type="date" id="d-hasta" onchange="renderDet()">
+      <div class="date-btns">
+        <button class="date-btn" onclick="setFechaSection('d','hoy')">Hoy</button>
+        <button class="date-btn" onclick="setFechaSection('d','ayer')">Ayer</button>
+        <button class="date-btn" onclick="setFechaSection('d','3dias')">3 días</button>
+        <button class="date-btn" onclick="setFechaSection('d','semana')">Semana</button>
+        <button class="date-btn active" onclick="setFechaSection('d','todo')">Todo</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
-      <div class="tbl-header">
-        <span class="tbl-title">Detalle de casos — Monitoreo</span>
-        <div class="filters">
+      <div class="tbl-header" style="flex-wrap:wrap;gap:8px">
+        <span class="tbl-title">Detalle — Mon + Inc</span>
+        <div class="filters" style="flex-wrap:wrap">
+          <label>COD</label>
+          <input type="text" id="d-cod" oninput="renderDet()" placeholder="ej. 10438"
+            style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;padding:5px 10px;outline:none;width:110px;font-family:'Outfit',sans-serif">
+          <label>Fuente</label>
+          <select id="d-fuente" onchange="renderDet()">
+            <option value="all">Todas</option>
+            <option value="mon">Monitoreo</option>
+            <option value="inc">Incidencias</option>
+          </select>
           <label>Monitor</label>
           <select id="d-monitor" onchange="renderDet()"><option value="all">Todos</option></select>
           <label>Tipo</label>
@@ -473,6 +496,7 @@ function setFechaSection(prefix, rango) {
   event.target.classList.add('active');
   if(prefix==='m') renderMon();
   else if(prefix==='i') renderInc();
+  else if(prefix==='d') renderDet();
 }
 
 function rerender() { renderResumen(); renderMon(); renderInc(); renderDet(); }
@@ -745,7 +769,9 @@ function renderResumen() {
     // Inc
     const dI=incRows.find(d=>norm(d.tipo)===tN);
     const totalI=dI?dI.total:0, cI=dI?dI.cumple:0, nI=dI?dI.conTiempo:0;
-    const totalG=(monRows.filter(r=>norm(r['Motivo de solución']||r['Incidencias']||'')===tN).length)+(totalI);
+    // Mon total for this tipo (from already-filtered monRows)
+    const monTipoTotal=monRows.filter(r=>norm(r['Motivo de solución']||r['Incidencias']||'')===tN).length;
+    const totalG=monTipoTotal+totalI;
     const cG=cM+cI, nG=nM+nI;
     const pG=nG>0?Math.round(cG/nG*100):null;
     const sumaI=dI?dI.sumaHoras:0, nI2=dI?dI.nHoras:0;
@@ -761,7 +787,7 @@ function renderResumen() {
 
     html+=`<tr>
       <td><div class="tipo-cell"><span style="font-size:18px;margin-right:10px">${icon}</span><span style="font-weight:500">${t}</span></div></td>
-      <td style="font-weight:600;font-size:15px">${totalG||'—'}</td>
+      <td style="font-weight:600;font-size:15px">${totalG}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${ideal?ideal+'h':'—'}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promReal}</td>
       <td>${cumplBadge}</td>
@@ -784,25 +810,23 @@ function renderMon() {
 
   if(!rows.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
 
-  // Agrupar por tipo (igual que incidencias)
-  const agr={};
+  // Agrupar por tipo -- todos los 7 tipos siempre visibles
+  const SLA_KEYS_M = Object.keys(SLA_IDEAL);
+  const agr = {};
+  SLA_KEYS_M.forEach(k => {
+    agr[k] = {t: TIPO_MAP[k]||k, ideal: SLA_IDEAL[k], total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
+  });
   rows.forEach(r=>{
-    const t=normTipo(r['Motivo de solución'])||null;
-    if(!t) return;
-    const tN=norm(t), ideal=SLA_IDEAL[tN]??null;
-    const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
-    if(!agr[t]) agr[t]={t,ideal,total:0,cerr:0,abiertos:0,cumple:0,con:0,suma:0};
-    agr[t].total++;
-    if(cerr){agr[t].cerr++;if(dur>0&&ideal!==null){agr[t].con++;agr[t].suma+=dur;if(dur<=ideal)agr[t].cumple++;}}
-    else agr[t].abiertos++;
+    const raw = (r['Motivo de solución']||r['Incidencias']||'').trim();
+    const tKey = norm(raw);
+    if(!agr[tKey]) return;
+    const ideal = SLA_IDEAL[tKey];
+    const dur = parseDur(r['Duración']), cerr = norm(r['Estado']||'')==='cerrado';
+    agr[tKey].total++;
+    if(cerr){ agr[tKey].cerr++; if(dur>0&&ideal!==undefined){ agr[tKey].con++; agr[tKey].suma+=dur; if(dur<=ideal)agr[tKey].cumple++; } }
+    else agr[tKey].abiertos++;
   });
-
-  const ORDEN=Object.keys(SLA_IDEAL);
-  const filas=Object.values(agr).sort((a,b)=>{
-    const ia=ORDEN.indexOf(norm(a.t)), ib=ORDEN.indexOf(norm(b.t));
-    return (ia===-1?99:ia)-(ib===-1?99:ib);
-  });
-  if(!filas.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros con tipo SLA válido</div>';return;}
+  const filas = SLA_KEYS_M.map(k => agr[k]);
 
   let mHtml = `<table class="despega-table"><thead><tr>
     <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
@@ -818,9 +842,9 @@ function renderMon() {
     else cumplBadge=`<span class="cumpl-badge cumpl-bad">${p}%</span>`;
     mHtml+=`<tr>
       <td><div class="tipo-cell"><span style="font-size:18px;margin-right:10px">${icon}</span><span style="font-weight:500">${f.t}</span></div></td>
-      <td style="font-weight:600;font-size:15px">${f.total||'—'}</td>
-      <td style="font-weight:600;font-size:15px">${f.cerr||'—'}</td>
-      <td style="font-size:14px">${f.abiertos||'—'}</td>
+      <td style="font-weight:600;font-size:15px">${f.total}</td>
+      <td style="font-weight:600;font-size:15px">${f.cerr}</td>
+      <td style="font-size:14px">${f.abiertos}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${f.ideal!==null?f.ideal+'h':'—'}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promM}</td>
       <td>${cumplBadge}</td>
@@ -833,13 +857,8 @@ function renderMon() {
 function renderInc() {
   const tipo=document.getElementById('i-tipo')?.value||'all';
   const {desde, hasta} = getFechaFiltroSection('i');
-  let rows;
-  if (!desde && !hasta) {
-    rows = RAW_INC;
-  } else {
-    rows = calcIncDesdeFilas(RAW_INC_FILAS, desde, hasta);
-  }
-  if(tipo!=='all') rows=rows.filter(d=>d.tipo===tipo||norm(d.tipo)===norm(tipo));
+  const rows = calcIncDesdeFilas(RAW_INC_FILAS, desde, hasta);
+  if(tipo!=='all') rows=rows.filter(d=>norm(d.tipo)===norm(tipo)||d.tipo===tipo);
   const s=calcInc(rows);
   const cls=p=>p===null?'':p>=80?'g':p>=50?'a':'r';
   const {desde:iD,hasta:iH}=getFechaFiltroSection('i');
@@ -870,9 +889,9 @@ function renderInc() {
     else cumplBadge=`<span class="cumpl-badge cumpl-bad">${p}%</span>`;
     iHtml+=`<tr>
       <td><div class="tipo-cell"><span style="font-size:18px;margin-right:10px">${icon}</span><span style="font-weight:500">${d.tipo}</span></div></td>
-      <td style="font-weight:600;font-size:15px">${d.total||'—'}</td>
-      <td style="font-weight:600;font-size:15px">${d.cerrados||'—'}</td>
-      <td style="font-size:14px">${d.abiertos||'—'}</td>
+      <td style="font-weight:600;font-size:15px">${d.total}</td>
+      <td style="font-weight:600;font-size:15px">${d.cerrados}</td>
+      <td style="font-size:14px">${d.abiertos}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${ideal!==undefined?ideal+'h':'—'}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promI}</td>
       <td>${cumplBadge}</td>
@@ -881,41 +900,97 @@ function renderInc() {
   document.getElementById('i-tabla').innerHTML=iHtml+'</tbody></table>';
 }
 
-// ── DETALLE ───────────────────────────────────────────────────────────────────
+// -- DETALLE --
 function renderDet() {
-  const bloque=document.getElementById('g-bloque').value;
-  const monitor=document.getElementById('d-monitor')?.value||'all';
-  const tipo=document.getElementById('d-tipo')?.value||'all';
-  const estado=document.getElementById('d-estado')?.value||'all';
+  const bloque  = document.getElementById('g-bloque').value;
+  const monitor = document.getElementById('d-monitor')?.value||'all';
+  const tipo    = document.getElementById('d-tipo')?.value||'all';
+  const estado  = document.getElementById('d-estado')?.value||'all';
+  const fuente  = document.getElementById('d-fuente')?.value||'all';
+  const codBusq = (document.getElementById('d-cod')?.value||'').trim().toLowerCase();
+  const {desde, hasta} = getFechaFiltroSection('d');
 
-  const rows=RAW_MON.filter(r=>{
+  // Filas Monitoreo
+  const rowsMon = fuente==='inc' ? [] : RAW_MON.filter(r=>{
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
     if(monitor!=='all'&&(r['Monitor']||'').trim()!==monitor) return false;
-    if(tipo!=='all'&&(r['Motivo de solución']||r['Incidencias']||'').trim()!==tipo) return false;
+    if(tipo!=='all'&&norm(r['Motivo de solución']||r['Incidencias']||'')!==norm(tipo)) return false;
     if(estado!=='all'&&norm(r['Estado']||'')!==estado) return false;
+    if(codBusq && !String(r['COD']||'').toLowerCase().includes(codBusq)) return false;
+    const f=fmtFecha(r['Fecha']);
+    if(desde && f<desde) return false;
+    if(hasta && f>hasta) return false;
     return true;
-  }).slice(0,200);
+  }).map(r=>({
+    _src:'mon', fecha:fmtFecha(r['Fecha']),
+    monitor:r['Monitor']||'—', cod:String(r['COD']||'—'),
+    bloque:(r['Bloque']||'—').trim(),
+    tipo:r['Motivo de solución']||r['Incidencias']||'—',
+    desc:r['Descripción']||'—',
+    durRaw:r['Duración']||'—', dur:parseDur(r['Duración']),
+    cerrado:norm(r['Estado']||'')==='cerrado'
+  }));
 
-  if(!rows.length){document.getElementById('d-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
+  // Filas Incidencias
+  const rowsInc = fuente==='mon' ? [] : RAW_INC_FILAS.filter(r=>{
+    if(estado!=='all'){
+      const ec=(r.estado||'').toUpperCase()==='CERRADO';
+      if(estado==='cerrado'&&!ec) return false;
+      if(estado==='abierto'&&ec) return false;
+    }
+    if(tipo!=='all'&&norm(r.tipo||'')!==norm(tipo)) return false;
+    if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
+    const f=(r.fecha_reporte||'').substring(0,10);
+    if(desde && f<desde) return false;
+    if(hasta && f>hasta) return false;
+    return true;
+  }).map(r=>({
+    _src:'inc', fecha:(r.fecha_reporte||'—').substring(0,10),
+    monitor:r.monitor||r.tecnico||'—',
+    cod:String(r.id_ce||r.cod||'—'),
+    bloque:r.bloque||'—',
+    tipo:TIPO_MAP[norm(r.tipo||'')]||r.tipo||'—',
+    desc:r.descripcion||r.detalle||'—',
+    durRaw:r.sla_texto||'—', dur:parseDur(r.sla_texto||''),
+    cerrado:(r.estado||'').toUpperCase()==='CERRADO'
+  }));
 
-  let html=`<table><thead><tr><th>Fecha</th><th>Monitor</th><th>COD</th><th>Bloque</th><th>Tipo</th><th>Descripción</th><th>Duración</th><th>Estado</th><th>SLA</th></tr></thead><tbody>`;
+  let rows = [...rowsMon, ...rowsInc].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const total = rows.length;
+  rows = rows.slice(0,300);
+
+  if(!rows.length){
+    document.getElementById('d-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';
+    return;
+  }
+
+  let html=`<div style="padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border)">
+    ${total} registro${total!==1?'s':''} encontrado${total!==1?'s':''}${total>300?' — mostrando 300':''}
+  </div>
+  <table><thead><tr>
+    <th>Fuente</th><th>Fecha</th><th>Monitor</th><th>COD</th><th>Bloque</th><th>Tipo</th><th>Descripción</th><th>Duración</th><th>Estado</th><th>SLA</th>
+  </tr></thead><tbody>`;
+
   rows.forEach(r=>{
-    const tN=norm(r['Incidencias']||r['Tipo']||''), ideal=SLA_IDEAL[tN];
-    const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
+    const tN=norm(r.tipo), ideal=SLA_IDEAL[tN];
     let slaTag='<span class="badge nd">—</span>';
-    if(cerr&&dur>0&&ideal!==undefined) slaTag=dur<=ideal?'<span class="badge ok">✓ Cumple</span>':'<span class="badge bad">✗ Fuera</span>';
-    else if(!cerr) slaTag='<span class="badge warn">Abierto</span>';
-    const blq=(r['Bloque']||'—').trim();
+    if(r.cerrado&&r.dur>0&&ideal!==undefined) slaTag=r.dur<=ideal?'<span class="badge ok">✓ Cumple</span>':'<span class="badge bad">✗ Fuera</span>';
+    else if(!r.cerrado) slaTag='<span class="badge warn">Abierto</span>';
+    const blq=r.bloque;
+    const fuenteTag=r._src==='mon'
+      ?'<span class="badge mon" style="font-size:9px">MON</span>'
+      :'<span class="badge inc" style="font-size:9px">INC</span>';
     html+=`<tr>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap">${fmtFecha(r['Fecha'])}</td>
-      <td style="font-size:12px">${r['Monitor']||'—'}</td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">${r['COD']||'—'}</td>
-      <td><span class="badge ${blq==='B1'?'b1':'b2'}">${blq}</span></td>
-      <td style="font-size:12px">${r['Motivo de solución']||r['Incidencias']||'—'}</td>
-      <td style="font-size:11px;color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Descripción']||'—'}</td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${r['Duración']||'—'}</td>
-      <td>${cerr?'<span class="badge ok">Cerrado</span>':'<span class="badge warn">Abierto</span>'}</td>
+      <td>${fuenteTag}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap">${r.fecha}</td>
+      <td style="font-size:12px">${r.monitor}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);font-weight:600">${r.cod}</td>
+      <td><span class="badge ${blq==='B1'?'b1':blq==='B2'?'b2':'nd'}">${blq}</span></td>
+      <td style="font-size:12px;font-weight:500">${r.tipo}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.desc}">${r.desc}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${r.durRaw}</td>
+      <td>${r.cerrado?'<span class="badge ok">Cerrado</span>':'<span class="badge warn">Abierto</span>'}</td>
       <td>${slaTag}</td>
     </tr>`;
   });
