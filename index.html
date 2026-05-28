@@ -414,6 +414,23 @@ const norm = s => !s?'':s.toLowerCase().trim()
   .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i')
   .replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
 
+// Alias: cualquier variante del tipo → clave canónica de SLA_IDEAL
+const TIPO_ALIAS = {
+  'falla masiva nodo':       'falla masiva isp',
+  'falla masiva nodo isp':   'falla masiva isp',
+  'falla masiva de isp':     'falla masiva isp',
+  'falla isp':               'falla masiva isp',
+  'corte fibra optica':      'corte de fibra optica',
+  'corte de fibra':          'corte de fibra optica',
+  'reconfig lan':            'reconfiguracion lan (mined)',
+  'reconfig wan':            'reconfiguracion wan (isp)',
+};
+
+function normTipoKey(s) {
+  const n = norm(s);
+  return TIPO_ALIAS[n] || n;
+}
+
 function parseDur(s) {
   if(!s) return 0; s=String(s).trim();
   let m=s.match(/(\d+)\s*h\s*(\d+)\s*min/i); if(m) return +m[1]+ +m[2]/60;
@@ -523,9 +540,8 @@ async function loadAll() {
     const SLA_KEYS = Object.keys(SLA_IDEAL);
     const acum = {};
     SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
-    const normI = s => !s?'':s.toLowerCase().trim().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
     filasInc.forEach(r => {
-      const tKey = normI(r.tipo||'');
+      const tKey = normTipoKey(r.tipo||'');
       if (!acum[tKey]) return;
       acum[tKey].total++;
       if ((r.estado||'').toUpperCase() !== 'CERRADO') { acum[tKey].abiertos++; return; }
@@ -579,7 +595,7 @@ function getMonRows() {
   return RAW_MON.filter(r=>{
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
-    if(tipo!=='all'&&(r['Motivo de solución']||r['Incidencias']||'').trim()!==tipo) return false;
+    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
     if(estado!=='all'&&norm(r['Estado']||'')!==estado) return false;
     const f = fmtFecha(r['Fecha']);
     if(desde && f < desde) return false;
@@ -594,7 +610,7 @@ function calcMon(rows) {
     total++;
     if(norm(r['Estado']||'')==='cerrado'){
       cerr++;
-      const tN=norm(r['Motivo de solución']||r['Incidencias']||r['Tipo']||'');
+      const tN=normTipoKey(r['Motivo de solución']||r['Incidencias']||r['Tipo']||'');
       const ideal=SLA_IDEAL[tN];
       const dur=parseDur(r['Duración']);
       if(ideal!==undefined&&dur>0){con++;if(dur<=ideal)cumple++;}
@@ -639,7 +655,7 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     const f = r.fecha_reporte||'';
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
-    const tKey = norm(r.tipo||'');
+    const tKey = normTipoKey(r.tipo||'');
     if(!acum[tKey]) return;
     acum[tKey].total++;
     if((r.estado||'').toUpperCase()!=='CERRADO'){acum[tKey].abiertos++;return;}
@@ -722,7 +738,7 @@ function renderResumen() {
     // Mon
     let cM=0,nM=0;
     monRows.forEach(r=>{
-      if(norm(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
+      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
       const dur=parseDur(r['Duración']), ideal=SLA_IDEAL[tN], cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;if(dur<=ideal)cM++;}
     });
@@ -765,7 +781,7 @@ function renderResumen() {
     // Mon acumulado
     let cM=0,nM=0,sumaM=0;
     monRows.forEach(r=>{
-      if(norm(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
+      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
       const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;sumaM+=dur;if(dur<=ideal)cM++;}
     });
@@ -773,7 +789,7 @@ function renderResumen() {
     const dI=incRows.find(d=>norm(d.tipo)===tN);
     const totalI=dI?dI.total:0, cI=dI?dI.cumple:0, nI=dI?dI.conTiempo:0;
     // Mon total for this tipo (from already-filtered monRows)
-    const monTipoTotal=monRows.filter(r=>norm(r['Motivo de solución']||r['Incidencias']||'')===tN).length;
+    const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||r['Incidencias']||'')===tN).length;
     const totalG=monTipoTotal+totalI;
     const cG=cM+cI, nG=nM+nI;
     const pG=nG>0?Math.round(cG/nG*100):null;
@@ -821,7 +837,7 @@ function renderMon() {
   });
   rows.forEach(r=>{
     const raw = (r['Motivo de solución']||r['Incidencias']||'').trim();
-    const tKey = norm(raw);
+    const tKey = normTipoKey(raw);
     if(!agr[tKey]) return;
     const ideal = SLA_IDEAL[tKey];
     const dur = parseDur(r['Duración']), cerr = norm(r['Estado']||'')==='cerrado';
@@ -861,7 +877,7 @@ function renderInc() {
   const tipo=document.getElementById('i-tipo')?.value||'all';
   const {desde, hasta} = getFechaFiltroSection('i');
   const rows = calcIncDesdeFilas(RAW_INC_FILAS, desde, hasta);
-  if(tipo!=='all') rows=rows.filter(d=>norm(d.tipo)===norm(tipo)||d.tipo===tipo);
+  if(tipo!=='all') rows=rows.filter(d=>normTipoKey(d.tipo)===normTipoKey(tipo));
   const s=calcInc(rows);
   const cls=p=>p===null?'':p>=80?'g':p>=50?'a':'r';
   const {desde:iD,hasta:iH}=getFechaFiltroSection('i');
@@ -881,7 +897,7 @@ function renderInc() {
     const ia=ORDEN_I.indexOf(norm(a.tipo)), ib=ORDEN_I.indexOf(norm(b.tipo));
     return (ia===-1?99:ia)-(ib===-1?99:ib);
   }).forEach(d=>{
-    const tN=norm(d.tipo), ideal=SLA_IDEAL[tN];
+    const tN=normTipoKey(d.tipo), ideal=SLA_IDEAL[tN];
     const p=d.conTiempo>0?Math.round(d.cumple/d.conTiempo*100):null;
     const promI=d.nHoras>0?fmtHoras(d.sumaHoras/d.nHoras):'—';
     const icon=TIPO_ICONS[d.tipo]||'📋';
@@ -918,7 +934,7 @@ function renderDet() {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
     if(monitor!=='all'&&(r['Monitor']||'').trim()!==monitor) return false;
-    if(tipo!=='all'&&norm(r['Motivo de solución']||r['Incidencias']||'')!==norm(tipo)) return false;
+    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
     if(estado!=='all'&&norm(r['Estado']||'')!==estado) return false;
     if(codBusq && !String(r['COD']||'').toLowerCase().includes(codBusq)) return false;
     const f=fmtFecha(r['Fecha']);
@@ -929,8 +945,7 @@ function renderDet() {
     _src:'mon', fecha:fmtFecha(r['Fecha']),
     monitor:r['Monitor']||'—', cod:String(r['COD']||'—'),
     bloque:(r['Bloque']||'—').trim(),
-    tipo:r['Motivo de solución']||r['Incidencias']||'—',
-    desc:r['Descripción']||'—',
+    tipo:r['Motivo de solución']||r['Incidencias']||'—',    desc:r['Descripción']||'—',
     durRaw:r['Duración']||'—', dur:parseDur(r['Duración']),
     cerrado:norm(r['Estado']||'')==='cerrado'
   }));
@@ -942,7 +957,7 @@ function renderDet() {
       if(estado==='cerrado'&&!ec) return false;
       if(estado==='abierto'&&ec) return false;
     }
-    if(tipo!=='all'&&norm(r.tipo||'')!==norm(tipo)) return false;
+    if(tipo!=='all'&&normTipoKey(r.tipo||'')!==normTipoKey(tipo)) return false;
     if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
     const f=(r.fecha_reporte||'').substring(0,10);
     if(desde && f<desde) return false;
@@ -953,7 +968,7 @@ function renderDet() {
     monitor:r.monitor||r.tecnico||'—',
     cod:String(r.id_ce||r.cod||'—'),
     bloque:r.bloque||'—',
-    tipo:TIPO_MAP[norm(r.tipo||'')]||r.tipo||'—',
+    tipo:TIPO_MAP[normTipoKey(r.tipo||'')]||r.tipo||'—',
     desc:r.descripcion||r.detalle||'—',
     durRaw:r.sla_texto||'—', dur:parseDur(r.sla_texto||''),
     cerrado:(r.estado||'').toUpperCase()==='CERRADO'
@@ -976,7 +991,7 @@ function renderDet() {
   </tr></thead><tbody>`;
 
   rows.forEach(r=>{
-    const tN=norm(r.tipo), ideal=SLA_IDEAL[tN];
+    const tN=normTipoKey(r.tipo), ideal=SLA_IDEAL[tN];
     let slaTag='<span class="badge nd">—</span>';
     if(r.cerrado&&r.dur>0&&ideal!==undefined) slaTag=r.dur<=ideal?'<span class="badge ok">✓ Cumple</span>':'<span class="badge bad">✗ Fuera</span>';
     else if(!r.cerrado) slaTag='<span class="badge warn">Abierto</span>';
