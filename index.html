@@ -415,8 +415,9 @@ const norm = s => !s?'':s.toLowerCase().trim()
   .replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
 
 // Alias: cualquier variante del tipo → clave canónica de SLA_IDEAL
+// (claves SIEMPRE en minúsculas/sin acentos, porque se buscan tras norm())
 const TIPO_ALIAS = {
-  'Falla masiva Nodo':       'falla masiva isp',
+  'falla masiva nodo':       'falla masiva isp',
   'falla masiva nodo isp':   'falla masiva isp',
   'falla masiva de isp':     'falla masiva isp',
   'falla isp':               'falla masiva isp',
@@ -429,6 +430,16 @@ const TIPO_ALIAS = {
 function normTipoKey(s) {
   const n = norm(s);
   return TIPO_ALIAS[n] || n;
+}
+
+// Resuelve el tipo de una INCIDENCIA: usa TIPO y, si no es un tipo SLA válido
+// (p. ej. viene como "ISP"), cae al SUB TIPO ("Falla masiva Nodo" → falla masiva isp).
+function tipoIncKey(r) {
+  const k = normTipoKey(r.tipo || '');
+  if (SLA_IDEAL[k] !== undefined) return k;
+  const sk = normTipoKey(r.sub_tipo || '');
+  if (SLA_IDEAL[sk] !== undefined) return sk;
+  return k;
 }
 
 function parseDur(s) {
@@ -541,7 +552,7 @@ async function loadAll() {
     const acum = {};
     SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
     filasInc.forEach(r => {
-      const tKey = normTipoKey(r.tipo||'');
+      const tKey = tipoIncKey(r);
       if (!acum[tKey]) return;
       acum[tKey].total++;
       if ((r.estado||'').toUpperCase() !== 'CERRADO') { acum[tKey].abiertos++; return; }
@@ -655,7 +666,7 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     const f = r.fecha_reporte||'';
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
-    const tKey = normTipoKey(r.tipo||'');
+    const tKey = tipoIncKey(r);
     if(!acum[tKey]) return;
     acum[tKey].total++;
     if((r.estado||'').toUpperCase()!=='CERRADO'){acum[tKey].abiertos++;return;}
@@ -957,7 +968,7 @@ function renderDet() {
       if(estado==='cerrado'&&!ec) return false;
       if(estado==='abierto'&&ec) return false;
     }
-    if(tipo!=='all'&&normTipoKey(r.tipo||'')!==normTipoKey(tipo)) return false;
+    if(tipo!=='all'&&tipoIncKey(r)!==normTipoKey(tipo)) return false;
     if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
     const f=(r.fecha_reporte||'').substring(0,10);
     if(desde && f<desde) return false;
@@ -968,7 +979,7 @@ function renderDet() {
     monitor:r.monitor||r.tecnico||'—',
     cod:String(r.id_ce||r.cod||'—'),
     bloque:r.bloque||'—',
-    tipo:TIPO_MAP[normTipoKey(r.tipo||'')]||r.tipo||'—',
+    tipo:TIPO_MAP[tipoIncKey(r)]||r.tipo||'—',
     desc:r.descripcion||r.detalle||'—',
     durRaw:r.sla_texto||'—', dur:parseDur(r.sla_texto||''),
     cerrado:(r.estado||'').toUpperCase()==='CERRADO'
