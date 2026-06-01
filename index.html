@@ -255,11 +255,11 @@ canvas { width:100%!important; }
       <label>Hasta</label>
       <input id="f-hasta" type="date" onchange="rerender()">
       <div class="date-btns">
-        <button class="date-btn" onclick="setFecha('hoy')">Hoy</button>
-        <button class="date-btn" onclick="setFecha('ayer')">Ayer</button>
-        <button class="date-btn" onclick="setFecha('3dias')">3 días</button>
-        <button class="date-btn" onclick="setFecha('semana')">Semana</button>
-        <button class="date-btn active" onclick="setFecha('todo')">Todo</button>
+        <button class="date-btn" onclick="setFecha('hoy',this)">Hoy</button>
+        <button class="date-btn" onclick="setFecha('ayer',this)">Ayer</button>
+        <button class="date-btn" onclick="setFecha('3dias',this)">3 días</button>
+        <button class="date-btn" onclick="setFecha('semana',this)">Semana</button>
+        <button class="date-btn active" onclick="setFecha('todo',this)">Todo</button>
       </div>
     </div>
     <!-- Cards -->
@@ -287,11 +287,11 @@ canvas { width:100%!important; }
       <label>Hasta</label>
       <input type="date" id="m-hasta" onchange="renderMon()">
       <div class="date-btns">
-        <button class="date-btn" onclick="setFechaSection('m','hoy')">Hoy</button>
-        <button class="date-btn" onclick="setFechaSection('m','ayer')">Ayer</button>
-        <button class="date-btn" onclick="setFechaSection('m','3dias')">3 días</button>
-        <button class="date-btn" onclick="setFechaSection('m','semana')">Semana</button>
-        <button class="date-btn active" onclick="setFechaSection('m','todo')">Todo</button>
+        <button class="date-btn" onclick="setFechaSection('m','hoy',this)">Hoy</button>
+        <button class="date-btn" onclick="setFechaSection('m','ayer',this)">Ayer</button>
+        <button class="date-btn" onclick="setFechaSection('m','3dias',this)">3 días</button>
+        <button class="date-btn" onclick="setFechaSection('m','semana',this)">Semana</button>
+        <button class="date-btn active" onclick="setFechaSection('m','todo',this)">Todo</button>
       </div>
     </div>
     <div id="m-cards" class="cards" style="margin-bottom:16px"></div>
@@ -324,11 +324,11 @@ canvas { width:100%!important; }
       <label>Hasta</label>
       <input type="date" id="i-hasta" onchange="renderInc()">
       <div class="date-btns">
-        <button class="date-btn" onclick="setFechaSection('i','hoy')">Hoy</button>
-        <button class="date-btn" onclick="setFechaSection('i','ayer')">Ayer</button>
-        <button class="date-btn" onclick="setFechaSection('i','3dias')">3 días</button>
-        <button class="date-btn" onclick="setFechaSection('i','semana')">Semana</button>
-        <button class="date-btn active" onclick="setFechaSection('i','todo')">Todo</button>
+        <button class="date-btn" onclick="setFechaSection('i','hoy',this)">Hoy</button>
+        <button class="date-btn" onclick="setFechaSection('i','ayer',this)">Ayer</button>
+        <button class="date-btn" onclick="setFechaSection('i','3dias',this)">3 días</button>
+        <button class="date-btn" onclick="setFechaSection('i','semana',this)">Semana</button>
+        <button class="date-btn active" onclick="setFechaSection('i','todo',this)">Todo</button>
       </div>
     </div>
     <div id="i-cards" class="cards" style="margin-bottom:16px"></div>
@@ -355,11 +355,11 @@ canvas { width:100%!important; }
       <label>Hasta</label>
       <input type="date" id="d-hasta" onchange="renderDet()">
       <div class="date-btns">
-        <button class="date-btn" onclick="setFechaSection('d','hoy')">Hoy</button>
-        <button class="date-btn" onclick="setFechaSection('d','ayer')">Ayer</button>
-        <button class="date-btn" onclick="setFechaSection('d','3dias')">3 días</button>
-        <button class="date-btn" onclick="setFechaSection('d','semana')">Semana</button>
-        <button class="date-btn active" onclick="setFechaSection('d','todo')">Todo</button>
+        <button class="date-btn" onclick="setFechaSection('d','hoy',this)">Hoy</button>
+        <button class="date-btn" onclick="setFechaSection('d','ayer',this)">Ayer</button>
+        <button class="date-btn" onclick="setFechaSection('d','3dias',this)">3 días</button>
+        <button class="date-btn" onclick="setFechaSection('d','semana',this)">Semana</button>
+        <button class="date-btn active" onclick="setFechaSection('d','todo',this)">Todo</button>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -496,7 +496,7 @@ function nav(id,btn) {
   document.getElementById('page-title').textContent=TITLES[id];
 }
 
-function setFecha(rango) {
+function setFecha(rango, btn) {
   const hoy = new Date();
   const fmt = d => d.toISOString().split('T')[0];
   let desde, hasta = fmt(hoy);
@@ -507,8 +507,8 @@ function setFecha(rango) {
   else { desde=''; hasta=''; }
   document.getElementById('f-desde').value = desde;
   document.getElementById('f-hasta').value = hasta;
-  document.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('#sec-resumen .date-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
   rerender();
 }
 
@@ -526,7 +526,7 @@ function getFechaFiltroSection(prefix) {
   };
 }
 
-function setFechaSection(prefix, rango) {
+function setFechaSection(prefix, rango, btn) {
   const hoy = new Date();
   const fmt = d => d.toISOString().split('T')[0];
   let desde = '', hasta = fmt(hoy);
@@ -537,9 +537,11 @@ function setFechaSection(prefix, rango) {
   else { desde=''; hasta=''; }
   document.getElementById(prefix+'-desde').value = desde;
   document.getElementById(prefix+'-hasta').value = hasta;
-  const container = event.target.closest('.date-filter');
-  container.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
+  if(btn) {
+    const container = btn.closest('.date-filter');
+    container.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
   if(prefix==='m') renderMon();
   else if(prefix==='i') renderInc();
   else if(prefix==='d') renderDet();
@@ -624,7 +626,9 @@ function getMonRows() {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
     if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
-    if(estado!=='all'&&norm(r['Estado']||'')!==estado) return false;
+    const estadoNorm = norm(r['Estado']||'');
+    if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
+    if(estado==='abierto' && estadoNorm==='cerrado') return false;
     const f = fmtFecha(r['Fecha']);
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
@@ -680,7 +684,7 @@ function calcIncDesdeFilas(filas, desde, hasta) {
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
-    const f = r.fecha_reporte||'';
+    const f = (r.fecha_reporte||'').substring(0,10);
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
     const tKey = tipoIncKey(r);
@@ -907,7 +911,7 @@ function renderMon() {
 function renderInc() {
   const tipo=document.getElementById('i-tipo')?.value||'all';
   const {desde, hasta} = getFechaFiltroSection('i');
-  const rows = calcIncDesdeFilas(RAW_INC_FILAS, desde, hasta);
+  let rows = calcIncDesdeFilas(RAW_INC_FILAS, desde, hasta);
   if(tipo!=='all') rows=rows.filter(d=>normTipoKey(d.tipo)===normTipoKey(tipo));
   const s=calcInc(rows);
   const cls=p=>p===null?'':p>=80?'g':p>=50?'a':'r';
@@ -966,7 +970,9 @@ function renderDet() {
     if(bloque!=='all'&&b!==bloque) return false;
     if(monitor!=='all'&&(r['Monitor']||'').trim()!==monitor) return false;
     if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
-    if(estado!=='all'&&norm(r['Estado']||'')!==estado) return false;
+    const estadoNormD = norm(r['Estado']||'');
+    if(estado==='cerrado' && estadoNormD!=='cerrado') return false;
+    if(estado==='abierto' && estadoNormD==='cerrado') return false;
     if(codBusq && !String(r['COD']||'').toLowerCase().includes(codBusq)) return false;
     const f=fmtFecha(r['Fecha']);
     if(desde && f<desde) return false;
