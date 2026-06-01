@@ -431,22 +431,53 @@ const norm = s => !s?'':s.toLowerCase().trim()
 // Alias: cualquier variante del tipo → clave canónica de SLA_IDEAL
 // (claves SIEMPRE en minúsculas/sin acentos, porque se buscan tras norm())
 const TIPO_ALIAS = {
+  // Variantes de "Falla Masiva ISP"
   'falla masiva nodo':       'falla masiva isp',
   'falla masiva nodo isp':   'falla masiva isp',
   'falla masiva de isp':     'falla masiva isp',
   'falla isp':               'falla masiva isp',
+  // Variantes de "Activo con redundancia" (cortes de fibra)
   'corte fibra optica':      'activo con redundancia',
   'corte de fibra':          'activo con redundancia',
   'corte de fibra optica':   'activo con redundancia',
+  'corte fibra':             'activo con redundancia',
+  'cfo':                     'activo con redundancia',
+  'fibra cortada':           'activo con redundancia',
+  // Variantes de "Reconfiguración LAN"
   'reconfig lan':            'reconfiguracion lan (mined)',
+  'reconfiguracion lan':     'reconfiguracion lan (mined)',
+  'reconfiguracion lan (min...)':'reconfiguracion lan (mined)',
+  // Variantes de "Reconfiguración WAN"
   'reconfig wan':            'reconfiguracion wan (isp)',
+  'reconfiguracion wan':     'reconfiguracion wan (isp)',
+  // Variantes de "Límite de sesiones"
+  'saturacion de sesiones':  'limite de sesiones alcanzado',
+  'limite de sesiones':      'limite de sesiones alcanzado',
+  // Variantes de "Apoyo a usuario"
+  'error de usuario':        'apoyo a usuario',
+  'apoyo usuario':           'apoyo a usuario',
+  // Variantes de "Falla en suministro eléctrico"
   'falla en suministro electrico': 'falla en suministro electrico',
+  'falla electrica':         'falla en suministro electrico',
+  'suministro electrico':    'falla en suministro electrico',
+  // Variantes de "Activo con redundancia"
   'activo con redundancia':  'activo con redundancia',
 };
 
 function normTipoKey(s) {
   const n = norm(s);
-  return TIPO_ALIAS[n] || n;
+  // Coincidencia exacta con alias o con SLA_IDEAL directamente
+  if (TIPO_ALIAS[n]) return TIPO_ALIAS[n];
+  if (SLA_IDEAL[n] !== undefined) return n;
+  // Búsqueda por prefijo en TIPO_ALIAS (para valores truncados o variantes)
+  for (const [key, val] of Object.entries(TIPO_ALIAS)) {
+    if (n.startsWith(key) || key.startsWith(n)) return val;
+  }
+  // Búsqueda por prefijo en SLA_IDEAL
+  for (const key of Object.keys(SLA_IDEAL)) {
+    if (n.startsWith(key) || key.startsWith(n)) return key;
+  }
+  return n;
 }
 
 // Resuelve el tipo de una INCIDENCIA: usa TIPO y, si no es un tipo SLA válido
@@ -864,28 +895,34 @@ function renderMon() {
 
   if(!rows.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
 
-  // Agrupar por tipo -- todos los 7 tipos siempre visibles
+  // Agrupar por tipo -- todos los tipos conocidos siempre visibles
   const SLA_KEYS_M = SLA_TIPO_ORDER;
   const agr = {};
   SLA_KEYS_M.forEach(k => {
     agr[k] = {t: TIPO_MAP[k]||k, ideal: SLA_IDEAL[k], total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
   });
+  // Bucket para tipos no reconocidos
+  const otros = {t:'Otros / Sin clasificar', ideal:undefined, total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
+
   rows.forEach(r=>{
     const raw = (r['Motivo de solución']||r['Incidencias']||'').trim();
     const tKey = normTipoKey(raw);
-    if(!agr[tKey]) return;
+    const dest = agr[tKey] || otros;
     const ideal = SLA_IDEAL[tKey];
     const dur = parseDur(r['Duración']), cerr = norm(r['Estado']||'')==='cerrado';
-    agr[tKey].total++;
-    if(cerr){ agr[tKey].cerr++; if(dur>0&&ideal!==undefined){ agr[tKey].con++; agr[tKey].suma+=dur; if(dur<=ideal)agr[tKey].cumple++; } }
-    else agr[tKey].abiertos++;
+    dest.total++;
+    if(cerr){ dest.cerr++; if(dur>0&&ideal!==undefined){ dest.con++; dest.suma+=dur; if(dur<=ideal)dest.cumple++; } }
+    else dest.abiertos++;
   });
-  const filas = SLA_KEYS_M.map(k => agr[k]);
+
+  // Construir filas: tipos conocidos + otros si tiene datos
+  const filasTipos = SLA_KEYS_M.map(k => agr[k]);
+  if(otros.total > 0) filasTipos.push(otros);
 
   let mHtml = `<table class="despega-table"><thead><tr>
     <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
   </tr></thead><tbody>`;
-  filas.forEach(f=>{
+  filasTipos.forEach(f=>{
     const p=f.con>0?Math.round(f.cumple/f.con*100):null;
     const promM=f.con>0?fmtHoras(f.suma/f.con):'—';
     const icon=TIPO_ICONS[f.t]||'📋';
@@ -899,11 +936,32 @@ function renderMon() {
       <td style="font-weight:600;font-size:15px">${f.total}</td>
       <td style="font-weight:600;font-size:15px">${f.cerr}</td>
       <td style="font-size:14px">${f.abiertos}</td>
-      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${f.ideal!==null?f.ideal+'h':'—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${f.ideal!==undefined?f.ideal+'h':'—'}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${promM}</td>
       <td>${cumplBadge}</td>
     </tr>`;
   });
+
+  // Fila de totales
+  const totales = filasTipos.reduce((acc,f)=>({
+    total:acc.total+f.total, cerr:acc.cerr+f.cerr, abiertos:acc.abiertos+f.abiertos,
+    cumple:acc.cumple+f.cumple, con:acc.con+f.con, suma:acc.suma+f.suma
+  }), {total:0,cerr:0,abiertos:0,cumple:0,con:0,suma:0});
+  const pTot = totales.con>0?Math.round(totales.cumple/totales.con*100):null;
+  let totBadge = pTot===null?'<span class="cumpl-badge cumpl-nd">—</span>'
+    :pTot>=80?`<span class="cumpl-badge cumpl-ok">${pTot}%</span>`
+    :pTot>=50?`<span class="cumpl-badge cumpl-warn">${pTot}%</span>`
+    :`<span class="cumpl-badge cumpl-bad">${pTot}%</span>`;
+  mHtml+=`<tr style="background:rgba(59,130,246,0.06);border-top:2px solid rgba(59,130,246,0.2)">
+    <td style="font-weight:700;font-size:13px;color:var(--accent)">TOTAL</td>
+    <td style="font-weight:700;font-size:15px">${totales.total}</td>
+    <td style="font-weight:700;font-size:15px">${totales.cerr}</td>
+    <td style="font-size:14px;font-weight:700">${totales.abiertos}</td>
+    <td>—</td>
+    <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${totales.con>0?fmtHoras(totales.suma/totales.con):'—'}</td>
+    <td>${totBadge}</td>
+  </tr>`;
+
   document.getElementById('m-tabla').innerHTML=mHtml+'</tbody></table>';
 }
 
