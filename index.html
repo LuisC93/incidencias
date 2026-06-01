@@ -406,7 +406,7 @@ const SLA_IDEAL = {
   'cambio de equipos (isp)':48,
   'reconfiguracion wan (isp)':48,
   'falla masiva isp':48,
-  'falla en suministro eléctrico':48
+  'falla en suministro electrico':48
 };
 
 let RAW_MON=[], RAW_INC=[], RAW_INC_FILAS=[], cMonI=null, cIncI=null;
@@ -426,7 +426,7 @@ const TIPO_ALIAS = {
   'corte de fibra':          'corte de fibra optica',
   'reconfig lan':            'reconfiguracion lan (mined)',
   'reconfig wan':            'reconfiguracion wan (isp)',
-  'falla en suministro eléctrico': 'falla en suministro eléctrico'
+  'falla en suministro electrico': 'falla en suministro electrico',
 };
 
 function normTipoKey(s) {
@@ -692,11 +692,11 @@ const TIPO_MAP = {
   'reconfiguracion lan (mined)': 'Reconfiguración LAN (MINED)',
   'limite de sesiones alcanzado': 'Límite de sesiones alcanzado',
   'cambio de equipos (mined)': 'Cambio de equipos (MINED)',
-  'corte de fibra optica': 'Corte de fibra óptica',
+  'corte de fibra optica': 'Activo con redundancia',
   'cambio de equipos (isp)': 'Cambio de equipos (ISP)',
   'reconfiguracion wan (isp)': 'Reconfiguración WAN (ISP)',
-  'falla masiva isp':'Falla Masiva ISP',
-  'falla en suministro eléctrico':'Falla en suministro eléctrico'
+  'falla masiva isp': 'Falla Masiva ISP',
+  'falla en suministro eléctrico': 'Falla en suministro eléctrico',
 };
 
 function normTipo(s) {
@@ -707,7 +707,7 @@ const TIPO_ICONS = {
   'Apoyo a usuario': '👤',
   'Reconfiguración LAN (MINED)': '🔧',
   'Límite de sesiones alcanzado': '🔒',
-  'Corte de fibra óptica': '✂️',
+  'Activo con redundancia': '✂️',
   'Cambio de equipos (MINED)': '🖥️',
   'Reconfiguración WAN (ISP)': '🌐',
   'Cambio de equipos (ISP)': '⚙️',
