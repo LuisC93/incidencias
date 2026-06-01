@@ -401,13 +401,26 @@ const SLA_IDEAL = {
   'apoyo a usuario':3,
   'reconfiguracion lan (mined)':4,
   'limite de sesiones alcanzado':3,
+  'activo con redundancia':48,
   'cambio de equipos (mined)':12,
-  'corte de fibra optica':48,
-  'cambio de equipos (isp)':48,
   'reconfiguracion wan (isp)':48,
+  'cambio de equipos (isp)':48,
   'falla masiva isp':48,
   'falla en suministro electrico':48
 };
+
+// Orden explícito para garantizar que siempre aparezcan en este orden
+const SLA_TIPO_ORDER = [
+  'apoyo a usuario',
+  'reconfiguracion lan (mined)',
+  'limite de sesiones alcanzado',
+  'activo con redundancia',
+  'cambio de equipos (mined)',
+  'reconfiguracion wan (isp)',
+  'cambio de equipos (isp)',
+  'falla masiva isp',
+  'falla en suministro electrico'
+];
 
 let RAW_MON=[], RAW_INC=[], RAW_INC_FILAS=[], cMonI=null, cIncI=null;
 
@@ -422,11 +435,13 @@ const TIPO_ALIAS = {
   'falla masiva nodo isp':   'falla masiva isp',
   'falla masiva de isp':     'falla masiva isp',
   'falla isp':               'falla masiva isp',
-  'corte fibra optica':      'corte de fibra optica',
-  'corte de fibra':          'corte de fibra optica',
+  'corte fibra optica':      'activo con redundancia',
+  'corte de fibra':          'activo con redundancia',
+  'corte de fibra optica':   'activo con redundancia',
   'reconfig lan':            'reconfiguracion lan (mined)',
   'reconfig wan':            'reconfiguracion wan (isp)',
   'falla en suministro electrico': 'falla en suministro electrico',
+  'activo con redundancia':  'activo con redundancia',
 };
 
 function normTipoKey(s) {
@@ -550,7 +565,7 @@ async function loadAll() {
     // Incidencias: viene como array de filas, calculamos SLA por tipo
     const filasInc = Array.isArray(rInc) ? rInc : [];
     RAW_INC_FILAS = filasInc;
-    const SLA_KEYS = Object.keys(SLA_IDEAL);
+    const SLA_KEYS = SLA_TIPO_ORDER;
     const acum = {};
     SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
     filasInc.forEach(r => {
@@ -661,7 +676,7 @@ function getIncRowsFiltrados() {
 }
 
 function calcIncDesdeFilas(filas, desde, hasta) {
-  const SLA_KEYS = Object.keys(SLA_IDEAL);
+  const SLA_KEYS = SLA_TIPO_ORDER;
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
@@ -688,15 +703,15 @@ function calcIncDesdeFilas(filas, desde, hasta) {
 }
 
 const TIPO_MAP = {
-  'apoyo a usuario': 'Apoyo a usuario',
-  'reconfiguracion lan (mined)': 'Reconfiguración LAN (MINED)',
+  'apoyo a usuario':              'Apoyo a usuario',
+  'reconfiguracion lan (mined)':  'Reconfiguración LAN (MINED)',
   'limite de sesiones alcanzado': 'Límite de sesiones alcanzado',
-  'cambio de equipos (mined)': 'Cambio de equipos (MINED)',
-  'corte de fibra optica': 'Activo con redundancia',
-  'cambio de equipos (isp)': 'Cambio de equipos (ISP)',
-  'reconfiguracion wan (isp)': 'Reconfiguración WAN (ISP)',
-  'falla masiva isp': 'Falla Masiva ISP',
-  'falla en suministro eléctrico': 'Falla en suministro eléctrico',
+  'activo con redundancia':       'Activo con redundancia',
+  'cambio de equipos (mined)':    'Cambio de equipos (MINED)',
+  'reconfiguracion wan (isp)':    'Reconfiguración WAN (ISP)',
+  'cambio de equipos (isp)':      'Cambio de equipos (ISP)',
+  'falla masiva isp':             'Falla Masiva ISP',
+  'falla en suministro electrico':'Falla en suministro eléctrico',
 };
 
 function normTipo(s) {
@@ -747,14 +762,15 @@ function renderResumen() {
   document.getElementById('despega-rango').textContent = rangoTxt;
 
   // Gráfica combinada
-  const TIPOS_LABEL = Object.values(TIPO_MAP);
-  const datComb = TIPOS_LABEL.map(t => {
+  const TIPOS_LABEL = SLA_TIPO_ORDER.map(k => TIPO_MAP[k] || k);
+  const datComb = TIPOS_LABEL.map((t, idx) => {
+    const tK = SLA_TIPO_ORDER[idx];
     const tN = norm(t);
     // Mon
     let cM=0,nM=0;
     monRows.forEach(r=>{
-      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
-      const dur=parseDur(r['Duración']), ideal=SLA_IDEAL[tN], cerr=norm(r['Estado']||'')==='cerrado';
+      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tK) return;
+      const dur=parseDur(r['Duración']), ideal=SLA_IDEAL[tK], cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;if(dur<=ideal)cM++;}
     });
     // Inc
@@ -790,21 +806,21 @@ function renderResumen() {
     <th>Incidencia</th><th>Total</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
   </tr></thead><tbody>`;
 
-  TIPOS_LABEL.forEach(t => {
-    const tN = norm(t);
-    const ideal = SLA_IDEAL[tN];
+  SLA_TIPO_ORDER.forEach((tKey, idx) => {
+    const t = TIPOS_LABEL[idx];
+    const ideal = SLA_IDEAL[tKey];
     // Mon acumulado
     let cM=0,nM=0,sumaM=0;
     monRows.forEach(r=>{
-      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tN) return;
+      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tKey) return;
       const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;sumaM+=dur;if(dur<=ideal)cM++;}
     });
     // Inc
-    const dI=incRows.find(d=>norm(d.tipo)===tN);
+    const dI=incRows.find(d=>normTipoKey(d.tipo)===tKey);
     const totalI=dI?dI.total:0, cI=dI?dI.cumple:0, nI=dI?dI.conTiempo:0;
     // Mon total for this tipo (from already-filtered monRows)
-    const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||r['Incidencias']||'')===tN).length;
+    const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||r['Incidencias']||'')===tKey).length;
     const totalG=monTipoTotal+totalI;
     const cG=cM+cI, nG=nM+nI;
     const pG=nG>0?Math.round(cG/nG*100):null;
@@ -845,7 +861,7 @@ function renderMon() {
   if(!rows.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
 
   // Agrupar por tipo -- todos los 7 tipos siempre visibles
-  const SLA_KEYS_M = Object.keys(SLA_IDEAL);
+  const SLA_KEYS_M = SLA_TIPO_ORDER;
   const agr = {};
   SLA_KEYS_M.forEach(k => {
     agr[k] = {t: TIPO_MAP[k]||k, ideal: SLA_IDEAL[k], total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
@@ -907,7 +923,7 @@ function renderInc() {
   let iHtml = `<table class="despega-table"><thead><tr>
     <th>Tipo</th><th>Total</th><th>Cerrados</th><th>Abiertos</th><th>SLA Ideal</th><th>Prom. Real</th><th>Cumplimiento</th>
   </tr></thead><tbody>`;
-  const ORDEN_I=Object.keys(SLA_IDEAL);
+  const ORDEN_I=SLA_TIPO_ORDER;
   rows.sort((a,b)=>{
     const ia=ORDEN_I.indexOf(norm(a.tipo)), ib=ORDEN_I.indexOf(norm(b.tipo));
     return (ia===-1?99:ia)-(ib===-1?99:ib);
