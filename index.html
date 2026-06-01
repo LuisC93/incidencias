@@ -405,7 +405,8 @@ const SLA_IDEAL = {
   'corte de fibra optica':48,
   'cambio de equipos (isp)':48,
   'reconfiguracion wan (isp)':48,
-  'falla masiva isp':48
+  'falla masiva isp':48,
+  'falla en suministro eléctrico':48
 };
 
 let RAW_MON=[], RAW_INC=[], RAW_INC_FILAS=[], cMonI=null, cIncI=null;
@@ -425,6 +426,7 @@ const TIPO_ALIAS = {
   'corte de fibra':          'corte de fibra optica',
   'reconfig lan':            'reconfiguracion lan (mined)',
   'reconfig wan':            'reconfiguracion wan (isp)',
+  'falla en suministro eléctrico': 'falla en suministro eléctrico'
 };
 
 function normTipoKey(s) {
@@ -693,7 +695,8 @@ const TIPO_MAP = {
   'corte de fibra optica': 'Corte de fibra óptica',
   'cambio de equipos (isp)': 'Cambio de equipos (ISP)',
   'reconfiguracion wan (isp)': 'Reconfiguración WAN (ISP)',
-  'falla masiva isp':'Falla Masiva ISP'
+  'falla masiva isp':'Falla Masiva ISP',
+  'falla en suministro eléctrico':'Falla en suministro eléctrico'
 };
 
 function normTipo(s) {
@@ -708,7 +711,8 @@ const TIPO_ICONS = {
   'Cambio de equipos (MINED)': '🖥️',
   'Reconfiguración WAN (ISP)': '🌐',
   'Cambio de equipos (ISP)': '⚙️',
-  'Falla Masiva ISP': '💥'
+  'Falla Masiva ISP': '💥',
+  'Falla en suministro eléctrico': '⚡'
 };
 
 function fmtHoras(h) {
