@@ -233,12 +233,6 @@ canvas { width:100%!important; }
       <div class="topbar-meta" id="last-update">Cargando...</div>
     </div>
     <div class="topbar-right">
-      <label class="topbar-meta">Bloque</label>
-      <select id="g-bloque" onchange="rerender()">
-        <option value="all">B1 + B2</option>
-        <option value="B1">B1</option>
-        <option value="B2">B2</option>
-      </select>
       <button class="btn" onclick="loadAll()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.4"/></svg>
         Actualizar
@@ -618,10 +612,10 @@ async function loadAll() {
       fetch(URL_INC).then(r=>r.json()).catch(()=>({tipos:[]}))
     ]);
 
-    // Monitoreo: filtrar B1 y B2 de hoja SLA
+    // Monitoreo: solo B1 y B2
     RAW_MON = (rMon.sla||[]).filter(r=>{
       const b=(r['Bloque']||'').trim();
-      return b==='B1'||b==='B2'||b==='';
+      return b==='B1'||b==='B2';
     });
 
     // Incidencias: viene como array de filas, calculamos SLA por tipo
@@ -678,7 +672,7 @@ function fill(id, vals) {
 
 // ── FILTROS ───────────────────────────────────────────────────────────────────
 function getMonRows() {
-  const bloque=document.getElementById('g-bloque').value;
+  const bloque='all';
   const tipo=document.getElementById('m-tipo')?.value||'all';
   const estado=document.getElementById('m-estado')?.value||'all';
   const {desde, hasta} = getFechaFiltroSection('m');
@@ -720,7 +714,7 @@ function calcInc(rows) {
 // ── RESUMEN ───────────────────────────────────────────────────────────────────
 function getMonRowsFiltrados() {
   const {desde, hasta} = getFechaFiltro();
-  const bloque = document.getElementById('g-bloque').value;
+  const bloque='all';
   return RAW_MON.filter(r => {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
@@ -1043,7 +1037,7 @@ function renderInc() {
 
 // -- DETALLE --
 function renderDet() {
-  const bloque  = document.getElementById('g-bloque').value;
+  const bloque  = 'all';
   const monitor = document.getElementById('d-monitor')?.value||'all';
   const tipo    = document.getElementById('d-tipo')?.value||'all';
   const estado  = document.getElementById('d-estado')?.value||'all';
