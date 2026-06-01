@@ -436,7 +436,7 @@ const TIPO_ALIAS = {
   'falla masiva nodo isp':   'falla masiva isp',
   'falla masiva de isp':     'falla masiva isp',
   'falla isp':               'falla masiva isp',
-  // Variantes de "Activo con redundancia" (cortes de fibra)
+  // Variantes de "Activo con redundancia" (cortes de fibra) — Motivo de solución
   'corte fibra optica':      'activo con redundancia',
   'corte de fibra':          'activo con redundancia',
   'corte de fibra optica':   'activo con redundancia',
@@ -452,6 +452,7 @@ const TIPO_ALIAS = {
   'reconfiguracion wan':     'reconfiguracion wan (isp)',
   // Variantes de "Límite de sesiones"
   'saturacion de sesiones':  'limite de sesiones alcanzado',
+  'saturacion de sessiones': 'limite de sesiones alcanzado',
   'limite de sesiones':      'limite de sesiones alcanzado',
   // Variantes de "Apoyo a usuario"
   'error de usuario':        'apoyo a usuario',
@@ -626,9 +627,9 @@ async function loadAll() {
     });
 
     // Poblar filtros
-    fill('m-tipo',[...new Set(RAW_MON.map(r=>r['Motivo de solución']||r['Incidencias']).filter(Boolean))].sort());
+    fill('m-tipo',[...new Set(RAW_MON.map(r=>r['Motivo de solución']).filter(Boolean))].sort());
     fill('d-monitor',[...new Set(RAW_MON.map(r=>r['Monitor']).filter(Boolean))].sort());
-    fill('d-tipo',[...new Set(RAW_MON.map(r=>r['Motivo de solución']||r['Incidencias']).filter(Boolean))].sort());
+    fill('d-tipo',[...new Set(RAW_MON.map(r=>r['Motivo de solución']).filter(Boolean))].sort());
     fill('i-tipo',RAW_INC.map(d=>d.tipo));
 
     renderResumen(); renderMon(); renderInc(); renderDet();
@@ -656,7 +657,7 @@ function getMonRows() {
   return RAW_MON.filter(r=>{
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
-    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
+    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||'')!==normTipoKey(tipo)) return false;
     const estadoNorm = norm(r['Estado']||'');
     if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
     if(estado==='abierto' && estadoNorm==='cerrado') return false;
@@ -673,7 +674,7 @@ function calcMon(rows) {
     total++;
     if(norm(r['Estado']||'')==='cerrado'){
       cerr++;
-      const tN=normTipoKey(r['Motivo de solución']||r['Incidencias']||r['Tipo']||'');
+      const tN=normTipoKey(r['Motivo de solución']||'');
       const ideal=SLA_IDEAL[tN];
       const dur=parseDur(r['Duración']);
       if(ideal!==undefined&&dur>0){con++;if(dur<=ideal)cumple++;}
@@ -804,7 +805,7 @@ function renderResumen() {
     // Mon
     let cM=0,nM=0;
     monRows.forEach(r=>{
-      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tK) return;
+      if(normTipoKey(r['Motivo de solución']||'')!==tK) return;
       const dur=parseDur(r['Duración']), ideal=SLA_IDEAL[tK], cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;if(dur<=ideal)cM++;}
     });
@@ -847,7 +848,7 @@ function renderResumen() {
     // Mon acumulado
     let cM=0,nM=0,sumaM=0;
     monRows.forEach(r=>{
-      if(normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==tKey) return;
+      if(normTipoKey(r['Motivo de solución']||'')!==tKey) return;
       const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;sumaM+=dur;if(dur<=ideal)cM++;}
     });
@@ -855,7 +856,7 @@ function renderResumen() {
     const dI=incRows.find(d=>normTipoKey(d.tipo)===tKey);
     const totalI=dI?dI.total:0, cI=dI?dI.cumple:0, nI=dI?dI.conTiempo:0;
     // Mon total for this tipo (from already-filtered monRows)
-    const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||r['Incidencias']||'')===tKey).length;
+    const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||'')===tKey).length;
     const totalG=monTipoTotal+totalI;
     const cG=cM+cI, nG=nM+nI;
     const pG=nG>0?Math.round(cG/nG*100):null;
@@ -905,7 +906,7 @@ function renderMon() {
   const otros = {t:'Otros / Sin clasificar', ideal:undefined, total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
 
   rows.forEach(r=>{
-    const raw = (r['Motivo de solución']||r['Incidencias']||'').trim();
+    const raw = (r['Motivo de solución']||'').trim();
     const tKey = normTipoKey(raw);
     const dest = agr[tKey] || otros;
     const ideal = SLA_IDEAL[tKey];
@@ -1027,7 +1028,7 @@ function renderDet() {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
     if(monitor!=='all'&&(r['Monitor']||'').trim()!==monitor) return false;
-    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||r['Incidencias']||'')!==normTipoKey(tipo)) return false;
+    if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||'')!==normTipoKey(tipo)) return false;
     const estadoNormD = norm(r['Estado']||'');
     if(estado==='cerrado' && estadoNormD!=='cerrado') return false;
     if(estado==='abierto' && estadoNormD==='cerrado') return false;
@@ -1040,7 +1041,7 @@ function renderDet() {
     _src:'mon', fecha:fmtFecha(r['Fecha']),
     monitor:r['Monitor']||'—', cod:String(r['COD']||'—'),
     bloque:(r['Bloque']||'—').trim(),
-    tipo:r['Motivo de solución']||r['Incidencias']||'—',    desc:r['Descripción']||'—',
+    tipo:r['Motivo de solución']||'—',    desc:r['Descripción']||'—',
     durRaw:r['Duración']||'—', dur:parseDur(r['Duración']),
     cerrado:norm(r['Estado']||'')==='cerrado'
   }));
