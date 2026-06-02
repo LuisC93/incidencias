@@ -400,7 +400,8 @@ const SLA_IDEAL = {
   'reconfiguracion wan (isp)':48,
   'cambio de equipos (isp)':48,
   'falla masiva isp':48,
-  'falla en suministro electrico':48
+  'falla en suministro electrico':48,
+  'huawei':48,
 };
 
 // Orden explícito para garantizar que siempre aparezcan en este orden
@@ -413,7 +414,8 @@ const SLA_TIPO_ORDER = [
   'reconfiguracion wan (isp)',
   'cambio de equipos (isp)',
   'falla masiva isp',
-  'falla en suministro electrico'
+  'falla en suministro electrico',
+  'huawei', 
 ];
 
 let RAW_MON=[], RAW_INC=[], RAW_INC_FILAS=[], cMonI=null, cIncI=null;
@@ -457,6 +459,9 @@ const TIPO_ALIAS = {
   'suministro electrico':    'falla en suministro electrico',
   // Variantes de "Activo con redundancia"
   'activo con redundancia':  'activo con redundancia',
+  // variantes de "huawei"
+  'huawei':                   'huawei',
+  'huaweí':                   'huawei',
 };
 
 function normTipoKey(s) {
@@ -770,6 +775,7 @@ const TIPO_MAP = {
   'cambio de equipos (isp)':      'Cambio de equipos (ISP)',
   'falla masiva isp':             'Falla Masiva ISP',
   'falla en suministro electrico':'Falla en suministro eléctrico',
+  'huawei':                       'Huawei',
 };
 
 function normTipo(s) {
@@ -785,7 +791,8 @@ const TIPO_ICONS = {
   'Reconfiguración WAN (ISP)': '🌐',
   'Cambio de equipos (ISP)': '⚙️',
   'Falla Masiva ISP': '💥',
-  'Falla en suministro eléctrico': '⚡'
+  'Falla en suministro eléctrico': '⚡',
+  'Actualizacion Masiva Huawei': '📡',
 };
 
 function fmtHoras(h) {
