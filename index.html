@@ -645,37 +645,50 @@ async function loadAll() {
     // DEBUG: mostrar headers reales recibidos del GS
     if(rMon._sla_headers_orig) {
       console.log('📋 Headers ORIGINALES hoja SLA:', rMon._sla_headers_orig);
-      console.log('📋 Headers NORMALIZADOS hoja SLA:', rMon._sla_headers_norm);
+    }
+    if(rMon._muestra) {
+      console.log('📋 Primera fila RAW de SLA:', rMon._muestra);
     }
     if(RAW_MON.length > 0) {
       console.log('✅ RAW_MON keys:', Object.keys(RAW_MON[0]));
-      console.log('✅ RAW_MON[0] ejemplo:', RAW_MON[0]);
-      // Detectar si Fecha llega vacía en todos los registros
+      // Mostrar muestra de fechas para diagnóstico
+      const muestraFechas = RAW_MON.slice(0,5).map(r=>r['Fecha']||'(vacío)');
+      console.log('📅 Muestra de fechas RAW en Monitoreo:', muestraFechas);
+      console.log('📅 Fechas parseadas:', muestraFechas.map(f=>parseFechaYMD(f)));
       const sinFecha = RAW_MON.filter(r=>!r['Fecha']).length;
-      if(sinFecha > 0) {
-        console.warn(`⚠️ ${sinFecha} registros de Monitoreo sin campo 'Fecha'. Headers reales:`, Object.keys(RAW_MON[0]));
-        // Mostrar alerta visual en la sección monitoreo
+      if(sinFecha === RAW_MON.length) {
+        // Todos sin fecha — mostrar qué llegó realmente
+        const keysReales = Object.keys(RAW_MON[0]).filter(k=>k!=='_orig').join(', ');
+        const origKeys = rMon._sla_headers_orig ? rMon._sla_headers_orig.join(', ') : '?';
         document.getElementById('m-cards').innerHTML =
-          `<div class="err" style="grid-column:1/-1">
-            ⚠️ El campo "Fecha" no se encontró en los datos de Monitoreo.<br>
-            <b>Headers recibidos:</b> ${Object.keys(RAW_MON[0]).join(', ')}<br>
-            Actualiza el GS con la normalización de headers y redespliega.
+          `<div class="err" style="grid-column:1/-1;font-size:12px">
+            ⚠️ El campo <b>"Fecha"</b> no se encontró en los datos de Monitoreo.<br>
+            <b>Headers originales de tu hoja SLA:</b><br>
+            <code style="color:#f59e0b">${origKeys}</code><br><br>
+            Dile a Claude cuáles de esas columnas son: Fecha, Bloque, Estado, Duración, Tipo.
           </div>`;
       }
     } else if((rMon.sla||[]).length > 0) {
-      console.warn('⚠️ Hay', rMon.sla.length, 'filas en SLA pero ninguna con Bloque B1/B2');
-      console.log('🔍 Ejemplo fila SLA (sin filtro):', rMon.sla[0]);
+      const origKeys = rMon._sla_headers_orig ? rMon._sla_headers_orig.join(', ') : Object.keys(rMon.sla[0]).join(', ');
+      const bloqueVal = rMon._muestra ? (rMon._muestra['Bloque'] || Object.values(rMon._muestra).slice(0,5).join(' | ')) : '?';
+      document.getElementById('m-cards').innerHTML =
+        `<div class="err" style="grid-column:1/-1;font-size:12px">
+          ⚠️ Hay ${rMon.sla.length} registros pero ninguno tiene Bloque "B1" o "B2".<br>
+          <b>Headers de tu hoja SLA:</b><br>
+          <code style="color:#f59e0b">${origKeys}</code><br>
+          <b>Valor en columna Bloque:</b> "${bloqueVal}"
+        </div>`;
+    } else if(rMon.error) {
       document.getElementById('m-cards').innerHTML =
         `<div class="err" style="grid-column:1/-1">
-          ⚠️ Hay ${rMon.sla.length} registros en SLA pero ninguno tiene Bloque "B1" o "B2".<br>
-          <b>Headers recibidos:</b> ${Object.keys(rMon.sla[0]).join(', ')}<br>
-          Ejemplo de Bloque: "${rMon.sla[0]['Bloque']}"
+          ❌ Error en el GS: <b>${rMon.error}</b><br>
+          ${rMon.stack ? `<small>${rMon.stack.substring(0,200)}</small>` : ''}
         </div>`;
     } else {
-      console.error('❌ rMon.sla está vacío. rMon keys:', Object.keys(rMon));
       document.getElementById('m-cards').innerHTML =
         `<div class="err" style="grid-column:1/-1">
-          ❌ No llegaron datos de Monitoreo. Keys recibidas: ${Object.keys(rMon).join(', ')}
+          ❌ No llegaron datos de Monitoreo.<br>
+          Keys recibidas: ${Object.keys(rMon).join(', ')}
         </div>`;
     }
 
@@ -745,6 +758,53 @@ function fill(id, vals) {
 }
 
 // ── FILTROS ───────────────────────────────────────────────────────────────────
+// Convierte cualquier fecha a "YYYY-MM-DD" limpio, 100% robusto
+// Maneja el offset UTC-6 de El Salvador en fechas ISO
+function parseFechaYMD(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+
+  // ISO con hora y Z (UTC): "2026-06-01T06:00:00.000Z"
+  // Google Sheets guarda medianoche hora local como 06:00:00Z (UTC-6)
+  // Tomamos la parte de fecha LOCAL sumando el offset
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    try {
+      const d = new Date(s);
+      if (!isNaN(d)) {
+        // Usar fecha LOCAL del navegador (que está en la misma zona que la hoja)
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${dd}`;
+      }
+    } catch(e) {}
+    // Fallback: tomar substring pero ajustar si la hora es < 06:00
+    // (medianoche local = 06:00 UTC, si aparece 00:xx es otro día)
+    return s.substring(0, 10);
+  }
+
+  // Ya YYYY-MM-DD limpio
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+
+  // Intentar Date nativo
+  try {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${dd}`;
+    }
+  } catch(e) {}
+
+  return null;
+}
+
 function getMonRows() {
   const bloque='all';
   const tipo=document.getElementById('m-tipo')?.value||'all';
@@ -757,15 +817,13 @@ function getMonRows() {
     const estadoNorm = norm(r['Estado']||'');
     if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
     if(estado==='abierto' && estadoNorm==='cerrado') return false;
-    const f = fmtFecha(r['Fecha']);
-    // Si tiene fecha válida, aplicar filtro normalmente
-    if(f && f!=='—' && f.length>=10) {
-      if(desde && f < desde) return false;
-      if(hasta && f > hasta) return false;
-      return true;
-    }
-    // Sin fecha: solo incluir si NO hay filtro activo
-    return !desde && !hasta;
+    // Filtro de fecha robusto
+    if(!desde && !hasta) return true;
+    const f = parseFechaYMD(r['Fecha']);
+    if(!f) return !desde && !hasta; // sin fecha: excluir si hay filtro
+    if(desde && f < desde) return false;
+    if(hasta && f > hasta) return false;
+    return true;
   });
 }
 
@@ -793,17 +851,13 @@ function calcInc(rows) {
 // ── RESUMEN ───────────────────────────────────────────────────────────────────
 function getMonRowsFiltrados() {
   const {desde, hasta} = getFechaFiltro();
-  const bloque='all';
   return RAW_MON.filter(r => {
-    const b=(r['Bloque']||'').trim();
-    if(bloque!=='all'&&b!==bloque) return false;
-    const f = fmtFecha(r['Fecha']);
-    if(f && f!=='—' && f.length>=10) {
-      if(desde && f < desde) return false;
-      if(hasta && f > hasta) return false;
-      return true;
-    }
-    return !desde && !hasta;
+    if(!desde && !hasta) return true;
+    const f = parseFechaYMD(r['Fecha']);
+    if(!f) return false;
+    if(desde && f < desde) return false;
+    if(hasta && f > hasta) return false;
+    return true;
   });
 }
 
@@ -1163,7 +1217,8 @@ function renderDet() {
     if(estado==='cerrado' && estadoNormD!=='cerrado') return false;
     if(estado==='abierto' && estadoNormD==='cerrado') return false;
     if(codBusq && !String(r['COD']||'').toLowerCase().includes(codBusq)) return false;
-    const f=fmtFecha(r['Fecha']);
+    const f=parseFechaYMD(r['Fecha']);
+    if(!f) return !desde && !hasta;
     if(desde && f<desde) return false;
     if(hasta && f>hasta) return false;
     return true;
