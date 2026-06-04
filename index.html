@@ -470,7 +470,6 @@ const TIPO_ALIAS = {
   'cambio equipo isp':        'cambio de equipos (isp)',
   // variantes "Corte de fibra óptica" → activo con redundancia
   'corte de fibra optica':    'activo con redundancia',
-  'corte de fibra optica':    'activo con redundancia',
   // variantes ISP (tipo viene como "ISP" con sub_tipo Falla masiva Nodo)
   'isp':                      'falla masiva isp',
   // variantes Reconfiguracion con tilde y espacios extra
@@ -511,10 +510,61 @@ function tipoIncKey(r) {
 
 function parseDur(s) {
   if(!s) return 0; s=String(s).trim();
+  // Detectar si es un timestamp basura tipo "Sat Dec 30 1899..."
+  if(s.includes('1899') || s.includes('GMT')) return 0;
   let m=s.match(/(\d+)\s*h\s*(\d+)\s*min/i); if(m) return +m[1]+ +m[2]/60;
   m=s.match(/^(\d+(?:\.\d+)?)\s*h$/i); if(m) return parseFloat(m[1]);
   m=s.match(/^(\d+)\s*min$/i); if(m) return +m[1]/60;
   const n=parseFloat(s); return isNaN(n)?0:n;
+}
+
+// Parsea una hora en cualquier formato y devuelve horas decimales desde medianoche
+function parseHora(s) {
+  if(!s) return null;
+  s = String(s).trim();
+  if(!s || s.includes('1899')) return null;
+  // Formato "Sat Dec 30 1899 HH:MM:SS GMT..." — extraer HH:MM:SS
+  const gmtM = s.match(/(\d{1,2}):(\d{2}):(\d{2})/);
+  if(gmtM) return parseInt(gmtM[1]) + parseInt(gmtM[2])/60 + parseInt(gmtM[3])/3600;
+  // Formato "7:42:20 a.m." / "3:28 P.M."
+  const ampm = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+  if(ampm) {
+    let h = parseInt(ampm[1]), m = parseInt(ampm[2]), sec = parseInt(ampm[3]||0);
+    const pm = /p/i.test(ampm[4]);
+    if(pm && h!==12) h+=12;
+    if(!pm && h===12) h=0;
+    return h + m/60 + sec/3600;
+  }
+  // Formato "13:27" / "14:32"
+  const hhmm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if(hhmm) return parseInt(hhmm[1]) + parseInt(hhmm[2])/60;
+  return null;
+}
+
+// Obtiene duración en horas de una fila de incidencia
+// Prioridad: SLA (json) → sla_texto → tiempo_caido → calcula de hora_inicio/hora_cierre
+function getDurInc(r) {
+  // 0. Campo SLA directo del JSON (ya en horas o formato con unidades)
+  const slaJson = r.SLA || r.sla;
+  if(slaJson) {
+    const d0 = parseDur(String(slaJson));
+    if(d0 > 0) return parseFloat(d0.toFixed(4));
+  }
+  // 1. sla_texto directo
+  const d1 = parseDur(r.sla_texto||'');
+  if(d1 > 0) return d1;
+  // 2. tiempo_caido (ya en horas)
+  const tc = parseFloat(r.tiempo_caido||0);
+  if(!isNaN(tc) && tc > 0) return parseFloat(tc.toFixed(4));
+  // 3. Calcular de hora_inicio y hora_cierre
+  const hi = parseHora(r.hora_inicio||'');
+  const hc = parseHora(r.hora_cierre||'');
+  if(hi !== null && hc !== null) {
+    let diff = hc - hi;
+    if(diff < 0) diff += 24; // cruzó medianoche
+    if(diff > 0 && diff < 24) return parseFloat(diff.toFixed(4));
+  }
+  return 0;
 }
 
 function pctColor(p) { return p===null?'#3d4560':p>=80?'#10b981':p>=50?'#f59e0b':'#ef4444'; }
@@ -642,9 +692,19 @@ function rerender() { renderResumen(); renderMon(); renderInc(); renderDet(); }
 async function loadAll() {
   document.getElementById('last-update').textContent='Cargando...';
   try {
+    // Helper para fetch que detecta respuestas HTML (error del GS) antes de parsear JSON
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      const text = await res.text();
+      if(text.trim().startsWith('<')) {
+        throw new Error('El GS devolvió HTML en lugar de JSON. Verifica que la webapp esté desplegada como "Cualquier usuario" y que no haya errores en el código GS.');
+      }
+      return JSON.parse(text);
+    }
+
     const [rMon, rInc] = await Promise.all([
-      fetch(URL_MON).then(r=>r.json()),
-      fetch(URL_INC).then(r=>r.json()).catch(()=>({tipos:[]}))
+      fetchJSON(URL_MON),
+      fetchJSON(URL_INC).catch(()=>({tipos:[]}))
     ]);
 
     // Monitoreo: solo B1 y B2
@@ -727,12 +787,14 @@ async function loadAll() {
       if (!acum[tKey]) return;
       acum[tKey].total++;
       if ((r.estado||'').toUpperCase() !== 'CERRADO') { acum[tKey].abiertos++; return; }
-      const slaReal = parseDur(r.sla_texto||'');
+      const slaReal = getDurInc(r);
       const slaIdeal = SLA_IDEAL[tKey];
       if (slaReal <= 0) return;
       acum[tKey].sumaHoras+=slaReal; acum[tKey].nHoras++;
-      if (slaReal <= slaIdeal) acum[tKey].cumple++;
-      else acum[tKey].noCumple++;
+      if(slaIdeal!==null&&slaIdeal!==undefined){
+        if(slaReal <= slaIdeal) acum[tKey].cumple++;
+        else acum[tKey].noCumple++;
+      }
     });
     RAW_INC = SLA_KEYS.map(t => {
       const a = acum[t];
@@ -902,8 +964,10 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     // Excluir solo REPORTE; incluir INCIDENCIA, PROACTIVO y detalle vacío
     const det = (r.detalle||'').toUpperCase().trim();
     if (det === 'REPORTE') return;
-    // fecha_reporte ya viene como YYYY-MM-DD, comparamos directamente
-    const f = (r.fecha_reporte||'').substring(0,10);
+    // Normalizar fecha correctamente con fmtFecha
+    const f = fmtFecha(r.fecha_reporte||'');
+    // Si no se pudo parsear fecha, excluir
+    if(!f || f === '—') return;
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
     const tKey = tipoIncKey(r);
@@ -912,13 +976,32 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     const isCerrado = (r.estado||'').toUpperCase()==='CERRADO';
     if(isCerrado) {
       acum[tKey].cerrados++;
-      const slaReal=parseDur(r.sla_texto||''), slaIdeal=SLA_IDEAL[tKey];
+      const slaReal = getDurInc(r);
+      const slaIdeal = SLA_IDEAL[tKey];
       if(slaReal>0) {
         acum[tKey].sumaHoras+=slaReal; acum[tKey].nHoras++;
-        if(slaReal<=slaIdeal)acum[tKey].cumple++;else acum[tKey].noCumple++;
+        if(slaIdeal!==null&&slaIdeal!==undefined){
+          if(slaReal<=slaIdeal) acum[tKey].cumple++;
+          else acum[tKey].noCumple++;
+        }
+      } else {
+        // Caso cerrado sin duración registrada: contar como cumple
+        acum[tKey].cumple++;
       }
     } else {
       acum[tKey].abiertos++;
+      // Calcular tiempo en curso para abiertos (hora actual - hora_inicio)
+      const hi = parseHora(r.hora_inicio||'');
+      if(hi !== null) {
+        const ahora = new Date();
+        const horaActual = ahora.getHours() + ahora.getMinutes()/60 + ahora.getSeconds()/3600;
+        let enCurso = horaActual - hi;
+        if(enCurso < 0) enCurso += 24;
+        if(enCurso > 0 && enCurso < 24) {
+          acum[tKey].sumaEnCurso = (acum[tKey].sumaEnCurso||0) + enCurso;
+          acum[tKey].nEnCurso = (acum[tKey].nEnCurso||0) + 1;
+        }
+      }
     }
   });
   return SLA_KEYS.map(t=>{
@@ -927,7 +1010,8 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     return{tipoKey:t,tipo:tipoNombre,label:tipoNombre,total:a.total,cerrados:a.cerrados,abiertos:a.abiertos,
       cumple:a.cumple,noCumple:a.noCumple,slaIdeal:SLA_IDEAL[t],
       slaPct:conSLA>0?Math.round((a.cumple/conSLA)*100):null,conTiempo:conSLA,
-      sumaHoras:a.sumaHoras,nHoras:a.nHoras};
+      sumaHoras:a.sumaHoras,nHoras:a.nHoras,
+      sumaEnCurso:a.sumaEnCurso||0, nEnCurso:a.nEnCurso||0};
   });
 }
 
@@ -962,7 +1046,8 @@ const TIPO_ICONS = {
 };
 
 function fmtHoras(h) {
-  if(!h || h===0) return '—';
+  if(h===null || h===undefined) return '—';
+  if(h===0) return '0min';
   if(h < 1) return Math.round(h*60)+'min';
   const hrs = Math.floor(h), mins = Math.round((h-hrs)*60);
   return mins>0 ? `${hrs}h ${mins}min` : `${hrs}h`;
@@ -1059,10 +1144,19 @@ function renderResumen() {
     const sumaTotal=sumaM+sumaI, nTotal=nM+nI2;
     const promReal=nTotal>0?fmtHoras(sumaTotal/nTotal):'—';
     const icon=TIPO_ICONS[t]||'📋';
+    // Abiertos totales para este tipo
+    const abiertosG = (dI?dI.abiertos:0) + monRows.filter(r=>normTipoKey(r['Motivo de solución']||'')===tKey && norm(r['Estado']||'')!=='cerrado').length;
 
     let cumplBadge;
-    if(pG===null) cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
-    else if(pG>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${pG}%</span>`;
+    if(pG===null && totalG===0) {
+      cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
+    } else if(pG===null && abiertosG>0) {
+      // Hay casos pero todos abiertos — mostrar cuántos abiertos
+      cumplBadge=`<span class="cumpl-badge cumpl-nd" style="color:var(--amber)">${abiertosG} abierto${abiertosG>1?'s':''}</span>`;
+    } else if(pG===null) {
+      // Cerrados pero sin tiempo registrado
+      cumplBadge='<span class="cumpl-badge cumpl-nd">Sin dato</span>';
+    } else if(pG>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${pG}%</span>`;
     else if(pG>=50) cumplBadge=`<span class="cumpl-badge cumpl-warn">${pG}%</span>`;
     else cumplBadge=`<span class="cumpl-badge cumpl-bad">${pG}%</span>`;
 
@@ -1187,11 +1281,21 @@ function renderInc() {
   }).forEach(d=>{
     const tN=normTipoKey(d.tipo), ideal=SLA_IDEAL[tN];
     const p=d.conTiempo>0?Math.round(d.cumple/d.conTiempo*100):null;
-    const promI=d.nHoras>0?fmtHoras(d.sumaHoras/d.nHoras):'—';
+    // Prom real: usar cerrados si hay, si no mostrar tiempo en curso de abiertos
+    const promI = d.nHoras>0 ? fmtHoras(d.sumaHoras/d.nHoras)
+                : d.nEnCurso>0 ? `~${fmtHoras(d.sumaEnCurso/d.nEnCurso)} ⏱` : '—';
     const icon=TIPO_ICONS[d.tipo]||'📋';
     let cumplBadge;
-    if(p===null) cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
-    else if(p>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${p}%</span>`;
+    if(d.total===0) {
+      cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
+    } else if(d.abiertos>0 && d.cerrados===0) {
+      cumplBadge=`<span class="cumpl-badge cumpl-nd" style="color:var(--amber)">${d.abiertos} abierto${d.abiertos>1?'s':''}</span>`;
+    } else if(p===null && d.cerrados>0) {
+      // Cerrados sin duración: mostrar 100%
+      cumplBadge='<span class="cumpl-badge cumpl-ok">100%</span>';
+    } else if(p===null) {
+      cumplBadge='<span class="cumpl-badge cumpl-nd">—</span>';
+    } else if(p>=80) cumplBadge=`<span class="cumpl-badge cumpl-ok">${p}%</span>`;
     else if(p>=50) cumplBadge=`<span class="cumpl-badge cumpl-warn">${p}%</span>`;
     else cumplBadge=`<span class="cumpl-badge cumpl-bad">${p}%</span>`;
     iHtml+=`<tr>
@@ -1268,8 +1372,9 @@ function renderDet() {
     }
     if(tipo!=='all'&&tipoIncKey(r)!==normTipoKey(tipo)) return false;
     if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
-    // fecha_reporte ya viene YYYY-MM-DD, comparar directo
-    const f=(r.fecha_reporte||'').substring(0,10);
+    // Normalizar fecha correctamente
+    const f=fmtFecha(r.fecha_reporte||'');
+    if(!f || f === '—') return false;
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
     return true;
@@ -1280,7 +1385,8 @@ function renderDet() {
     bloque:r.bloque||'—',
     tipo:TIPO_MAP[tipoIncKey(r)]||r.tipo||'—',
     desc:r.descripcion||r.detalle||'—',
-    durRaw:r.sla_texto||'—', dur:parseDur(r.sla_texto||''),
+    durRaw:r.SLA||r.sla||r.sla_texto||r.tiempo_caido||'—',
+    dur:getDurInc(r),
     cerrado:(r.estado||'').toUpperCase()==='CERRADO'
   }));
 
