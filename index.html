@@ -642,15 +642,19 @@ async function loadAll() {
       return b==='B1'||b==='B2';
     });
 
-    // DEBUG: mostrar las keys del primer registro de monitoreo en consola
+    // DEBUG: mostrar headers reales recibidos del GS
+    if(rMon._sla_headers_orig) {
+      console.log('📋 Headers ORIGINALES hoja SLA:', rMon._sla_headers_orig);
+      console.log('📋 Headers NORMALIZADOS hoja SLA:', rMon._sla_headers_norm);
+    }
     if(RAW_MON.length > 0) {
-      console.log('🔍 RAW_MON keys:', Object.keys(RAW_MON[0]));
-      console.log('🔍 RAW_MON[0]:', RAW_MON[0]);
+      console.log('✅ RAW_MON keys:', Object.keys(RAW_MON[0]));
+      console.log('✅ RAW_MON[0] ejemplo:', RAW_MON[0]);
     } else if((rMon.sla||[]).length > 0) {
-      console.log('🔍 SLA keys (sin filtro B1/B2):', Object.keys(rMon.sla[0]));
-      console.log('🔍 SLA[0]:', rMon.sla[0]);
+      console.warn('⚠️ Hay', rMon.sla.length, 'filas en SLA pero ninguna con Bloque B1/B2');
+      console.log('🔍 Ejemplo fila SLA (sin filtro):', rMon.sla[0]);
     } else {
-      console.log('🔍 rMon completo:', JSON.stringify(rMon).substring(0,500));
+      console.error('❌ rMon.sla está vacío. rMon keys:', Object.keys(rMon));
     }
 
     // Incidencias: el script devuelve { filas: [...], tipos: [...], ... }
