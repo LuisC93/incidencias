@@ -396,9 +396,9 @@ const SLA_IDEAL = {
   'reconfiguracion lan (mined)':4,
   'limite de sesiones alcanzado':3,
   'activo con redundancia':48,
-  'cambio de equipo (mined)':12,
+  'cambio de equipos (mined)':12,
   'reconfiguracion wan (isp)':48,
-  'cambio de equipo (isp)':48,
+  'cambio de equipos (isp)':48,
   'falla masiva isp':48,
   'falla en suministro electrico':48,
   'huawei':48,
@@ -410,9 +410,9 @@ const SLA_TIPO_ORDER = [
   'reconfiguracion lan (mined)',
   'limite de sesiones alcanzado',
   'activo con redundancia',
-  'cambio de equipo (mined)',
+  'cambio de equipos (mined)',
   'reconfiguracion wan (isp)',
-  'cambio de equipo (isp)',
+  'cambio de equipos (isp)',
   'falla masiva isp',
   'falla en suministro electrico',
   'huawei', 
@@ -463,6 +463,11 @@ const TIPO_ALIAS = {
   // variantes de "huawei"
   'huawei':                   'huawei',
   'huaweí':                   'huawei',
+  // variantes "cambio de equipos" (con y sin s)
+  'cambio de equipo (mined)': 'cambio de equipos (mined)',
+  'cambio equipo mined':      'cambio de equipos (mined)',
+  'cambio de equipo (isp)':   'cambio de equipos (isp)',
+  'cambio equipo isp':        'cambio de equipos (isp)',
 };
 
 function normTipoKey(s) {
@@ -624,8 +629,11 @@ async function loadAll() {
       return b==='B1'||b==='B2';
     });
 
-    // Incidencias: viene como array de filas, calculamos SLA por tipo
-    const filasInc = Array.isArray(rInc) ? rInc : [];
+    // Incidencias: el script devuelve { filas: [...], tipos: [...], ... }
+    // o directamente un array (compatibilidad). Extraemos las filas correctamente.
+    const filasInc = Array.isArray(rInc) ? rInc
+                   : Array.isArray(rInc.filas) ? rInc.filas
+                   : [];
     RAW_INC_FILAS = filasInc;
     const SLA_KEYS = SLA_TIPO_ORDER;
     const acum = {};
@@ -777,7 +785,7 @@ const TIPO_MAP = {
   'reconfiguracion lan (mined)':  'Reconfiguración LAN (MINED)',
   'limite de sesiones alcanzado': 'Límite de sesiones alcanzado',
   'activo con redundancia':       'Activo con redundancia',
-  'cambio de equipo (mined)':    'Cambio de equipo (MINED)',
+  'cambio de equipos (mined)':  'Cambio de equipos (MINED)',
   'reconfiguracion wan (isp)':    'Reconfiguración WAN (ISP)',
   'cambio de equipos (isp)':      'Cambio de equipos (ISP)',
   'falla masiva isp':             'Falla Masiva ISP',
@@ -794,7 +802,7 @@ const TIPO_ICONS = {
   'Reconfiguración LAN (MINED)': '🔧',
   'Límite de sesiones alcanzado': '🔒',
   'Activo con redundancia': '✂️',
-  'Cambio de equipo (MINED)': '🖥️',
+  'Cambio de equipos (MINED)': '🖥️',
   'Reconfiguración WAN (ISP)': '🌐',
   'Cambio de equipos (ISP)': '⚙️',
   'Falla Masiva ISP': '💥',
