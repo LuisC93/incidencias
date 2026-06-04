@@ -926,19 +926,18 @@ function renderMon() {
 
   if(!rows.length){document.getElementById('m-tabla').innerHTML='<div class="loader" style="padding:20px;color:var(--text3)">Sin registros</div>';return;}
 
-  // Agrupar por tipo -- todos los tipos conocidos siempre visibles
-  const SLA_KEYS_M = SLA_TIPO_ORDER;
+  // Agrupar por tipo -- SOLO tipos que existen en los datos filtrados
+  const tiposPresentes = {};
   const agr = {};
-  SLA_KEYS_M.forEach(k => {
-    agr[k] = {t: TIPO_MAP[k]||k, ideal: SLA_IDEAL[k], total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
-  });
   // Bucket para tipos no reconocidos
   const otros = {t:'Otros / Sin clasificar', ideal:undefined, total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
 
   rows.forEach(r=>{
     const raw = (r['Motivo de solución']||'').trim();
     const tKey = normTipoKey(raw);
-    const dest = agr[tKey] || otros;
+    tiposPresentes[tKey] = true;
+    if(!agr[tKey]) agr[tKey] = {t: TIPO_MAP[tKey]||tKey, ideal: SLA_IDEAL[tKey], total:0, cerr:0, abiertos:0, cumple:0, con:0, suma:0};
+    const dest = agr[tKey];
     const ideal = SLA_IDEAL[tKey];
     const dur = parseDur(r['Duración']), cerr = norm(r['Estado']||'')==='cerrado';
     dest.total++;
@@ -946,8 +945,8 @@ function renderMon() {
     else dest.abiertos++;
   });
 
-  // Construir filas: tipos conocidos + otros si tiene datos
-  const filasTipos = SLA_KEYS_M.map(k => agr[k]);
+  // Construir filas: SOLO tipos que tienen datos, respetando orden SLA_TIPO_ORDER
+  const filasTipos = SLA_TIPO_ORDER.filter(k => tiposPresentes[k]).map(k => agr[k]);
   if(otros.total > 0) filasTipos.push(otros);
 
   let mHtml = `<table class="despega-table"><thead><tr>
@@ -1040,6 +1039,21 @@ function renderInc() {
       <td>${cumplBadge}</td>
     </tr>`;
   });
+  
+  // Fila de totales para incidencias
+  const totalesInc = rows.reduce((acc,d)=>({total:acc.total+d.total,cerrados:acc.cerrados+d.cerrados,abiertos:acc.abiertos+d.abiertos,cumple:acc.cumple+d.cumple,conTiempo:acc.conTiempo+d.conTiempo,sumaHoras:acc.sumaHoras+d.sumaHoras,nHoras:acc.nHoras+d.nHoras}),{total:0,cerrados:0,abiertos:0,cumple:0,conTiempo:0,sumaHoras:0,nHoras:0});
+  const pTotInc = totalesInc.conTiempo>0?Math.round(totalesInc.cumple/totalesInc.conTiempo*100):null;
+  let totBadgeInc = pTotInc===null?'<span class="cumpl-badge cumpl-nd">—</span>':pTotInc>=80?`<span class="cumpl-badge cumpl-ok">${pTotInc}%</span>`:pTotInc>=50?`<span class="cumpl-badge cumpl-warn">${pTotInc}%</span>`:`<span class="cumpl-badge cumpl-bad">${pTotInc}%</span>`;
+  iHtml+=`<tr style="background:rgba(52,211,153,0.06);border-top:2px solid rgba(52,211,153,0.2)">
+    <td style="font-weight:700;font-size:13px;color:var(--inc)">TOTAL</td>
+    <td style="font-weight:700;font-size:15px">${totalesInc.total}</td>
+    <td style="font-weight:700;font-size:15px">${totalesInc.cerrados}</td>
+    <td style="font-size:14px;font-weight:700">${totalesInc.abiertos}</td>
+    <td>—</td>
+    <td style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${totalesInc.nHoras>0?fmtHoras(totalesInc.sumaHoras/totalesInc.nHoras):'—'}</td>
+    <td>${totBadgeInc}</td>
+  </tr>`;
+  
   document.getElementById('i-tabla').innerHTML=iHtml+'</tbody></table>';
 }
 
