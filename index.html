@@ -468,6 +468,19 @@ const TIPO_ALIAS = {
   'cambio equipo mined':      'cambio de equipos (mined)',
   'cambio de equipo (isp)':   'cambio de equipos (isp)',
   'cambio equipo isp':        'cambio de equipos (isp)',
+  // variantes "Corte de fibra óptica" → activo con redundancia
+  'corte de fibra optica':    'activo con redundancia',
+  'corte de fibra optica':    'activo con redundancia',
+  // variantes ISP (tipo viene como "ISP" con sub_tipo Falla masiva Nodo)
+  'isp':                      'falla masiva isp',
+  // variantes Reconfiguracion con tilde y espacios extra
+  'reconfiguracion lan (mined)':  'reconfiguracion lan (mined)',
+  'reconfiguracion wan (isp)':    'reconfiguracion wan (isp)',
+  'reconfiguracion  wan (isp)':   'reconfiguracion wan (isp)',
+  'reconfiguracion  lan (mined)': 'reconfiguracion lan (mined)',
+  // falla en suministro con y sin tilde
+  'falla en suministro electrico': 'falla en suministro electrico',
+  'falla suministro electrico':    'falla en suministro electrico',
 };
 
 function normTipoKey(s) {
@@ -698,6 +711,7 @@ function getMonRows() {
     if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
     if(estado==='abierto' && estadoNorm==='cerrado') return false;
     const f = fmtFecha(r['Fecha']);
+    if(!f || f==='—') return true; // sin fecha: incluir siempre
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
     return true;
@@ -732,6 +746,7 @@ function getMonRowsFiltrados() {
   return RAW_MON.filter(r => {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
+    // La fecha de monitoreo puede venir en varios formatos, usamos fmtFecha
     const f = fmtFecha(r['Fecha']);
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
@@ -752,7 +767,8 @@ function calcIncDesdeFilas(filas, desde, hasta) {
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,cerrados:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
-    const f = fmtFecha(r.fecha_reporte||'');
+    // fecha_reporte ya viene como YYYY-MM-DD, comparamos directamente
+    const f = (r.fecha_reporte||'').substring(0,10);
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
     const tKey = tipoIncKey(r);
@@ -1113,9 +1129,10 @@ function renderDet() {
     }
     if(tipo!=='all'&&tipoIncKey(r)!==normTipoKey(tipo)) return false;
     if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
-    const f=fmtFecha(r.fecha_reporte||'');
-    if(desde && f<desde) return false;
-    if(hasta && f>hasta) return false;
+    // fecha_reporte ya viene YYYY-MM-DD, comparar directo
+    const f=(r.fecha_reporte||'').substring(0,10);
+    if(desde && f < desde) return false;
+    if(hasta && f > hasta) return false;
     return true;
   }).map(r=>({
     _src:'inc', fecha:fmtFecha(r.fecha_reporte||''),
