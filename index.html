@@ -744,7 +744,7 @@ function calcIncDesdeFilas(filas, desde, hasta) {
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,cerrados:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
-    const f = (r.fecha_reporte||'').substring(0,10);
+    const f = fmtFecha(r.fecha_reporte||'');
     if(desde && f < desde) return;
     if(hasta && f > hasta) return;
     const tKey = tipoIncKey(r);
@@ -1105,12 +1105,12 @@ function renderDet() {
     }
     if(tipo!=='all'&&tipoIncKey(r)!==normTipoKey(tipo)) return false;
     if(codBusq && !String(r.id_ce||r.cod||'').toLowerCase().includes(codBusq)) return false;
-    const f=(r.fecha_reporte||'').substring(0,10);
+    const f=fmtFecha(r.fecha_reporte||'');
     if(desde && f<desde) return false;
     if(hasta && f>hasta) return false;
     return true;
   }).map(r=>({
-    _src:'inc', fecha:(r.fecha_reporte||'—').substring(0,10),
+    _src:'inc', fecha:fmtFecha(r.fecha_reporte||''),
     monitor:r.monitor||r.tecnico||'—',
     cod:String(r.id_ce||r.cod||'—'),
     bloque:r.bloque||'—',
