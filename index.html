@@ -650,11 +650,33 @@ async function loadAll() {
     if(RAW_MON.length > 0) {
       console.log('✅ RAW_MON keys:', Object.keys(RAW_MON[0]));
       console.log('✅ RAW_MON[0] ejemplo:', RAW_MON[0]);
+      // Detectar si Fecha llega vacía en todos los registros
+      const sinFecha = RAW_MON.filter(r=>!r['Fecha']).length;
+      if(sinFecha > 0) {
+        console.warn(`⚠️ ${sinFecha} registros de Monitoreo sin campo 'Fecha'. Headers reales:`, Object.keys(RAW_MON[0]));
+        // Mostrar alerta visual en la sección monitoreo
+        document.getElementById('m-cards').innerHTML =
+          `<div class="err" style="grid-column:1/-1">
+            ⚠️ El campo "Fecha" no se encontró en los datos de Monitoreo.<br>
+            <b>Headers recibidos:</b> ${Object.keys(RAW_MON[0]).join(', ')}<br>
+            Actualiza el GS con la normalización de headers y redespliega.
+          </div>`;
+      }
     } else if((rMon.sla||[]).length > 0) {
       console.warn('⚠️ Hay', rMon.sla.length, 'filas en SLA pero ninguna con Bloque B1/B2');
       console.log('🔍 Ejemplo fila SLA (sin filtro):', rMon.sla[0]);
+      document.getElementById('m-cards').innerHTML =
+        `<div class="err" style="grid-column:1/-1">
+          ⚠️ Hay ${rMon.sla.length} registros en SLA pero ninguno tiene Bloque "B1" o "B2".<br>
+          <b>Headers recibidos:</b> ${Object.keys(rMon.sla[0]).join(', ')}<br>
+          Ejemplo de Bloque: "${rMon.sla[0]['Bloque']}"
+        </div>`;
     } else {
       console.error('❌ rMon.sla está vacío. rMon keys:', Object.keys(rMon));
+      document.getElementById('m-cards').innerHTML =
+        `<div class="err" style="grid-column:1/-1">
+          ❌ No llegaron datos de Monitoreo. Keys recibidas: ${Object.keys(rMon).join(', ')}
+        </div>`;
     }
 
     // Incidencias: el script devuelve { filas: [...], tipos: [...], ... }
@@ -736,10 +758,14 @@ function getMonRows() {
     if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
     if(estado==='abierto' && estadoNorm==='cerrado') return false;
     const f = fmtFecha(r['Fecha']);
-    if(!f || f==='—') return true; // sin fecha: incluir siempre
-    if(desde && f < desde) return false;
-    if(hasta && f > hasta) return false;
-    return true;
+    // Si tiene fecha válida, aplicar filtro normalmente
+    if(f && f!=='—' && f.length>=10) {
+      if(desde && f < desde) return false;
+      if(hasta && f > hasta) return false;
+      return true;
+    }
+    // Sin fecha: solo incluir si NO hay filtro activo
+    return !desde && !hasta;
   });
 }
 
@@ -771,11 +797,13 @@ function getMonRowsFiltrados() {
   return RAW_MON.filter(r => {
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
-    // La fecha de monitoreo puede venir en varios formatos, usamos fmtFecha
     const f = fmtFecha(r['Fecha']);
-    if(desde && f < desde) return false;
-    if(hasta && f > hasta) return false;
-    return true;
+    if(f && f!=='—' && f.length>=10) {
+      if(desde && f < desde) return false;
+      if(hasta && f > hasta) return false;
+      return true;
+    }
+    return !desde && !hasta;
   });
 }
 
