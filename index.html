@@ -648,10 +648,20 @@ async function loadAll() {
                    : Array.isArray(rInc.filas) ? rInc.filas
                    : [];
     RAW_INC_FILAS = filasInc;
+
+    // Helper: determina si una fila cuenta como incidencia para SLA
+    // INCIDENCIA explícito, o detalle vacío (registros sin clasificar)
+    // Excluimos: PROACTIVO, REPORTE
+    function esIncidenciaSLA(r) {
+      const d = (r.detalle||'').toUpperCase().trim();
+      return d === 'INCIDENCIA' || d === '';
+    }
+
     const SLA_KEYS = SLA_TIPO_ORDER;
     const acum = {};
     SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
     filasInc.forEach(r => {
+      if (!esIncidenciaSLA(r)) return; // excluir PROACTIVO y REPORTE
       const tKey = tipoIncKey(r);
       if (!acum[tKey]) return;
       acum[tKey].total++;
@@ -767,6 +777,9 @@ function calcIncDesdeFilas(filas, desde, hasta) {
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,cerrados:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
+    // Excluir PROACTIVO y REPORTE; incluir INCIDENCIA y detalle vacío
+    const det = (r.detalle||'').toUpperCase().trim();
+    if (det === 'PROACTIVO' || det === 'REPORTE') return;
     // fecha_reporte ya viene como YYYY-MM-DD, comparamos directamente
     const f = (r.fecha_reporte||'').substring(0,10);
     if(desde && f < desde) return;
@@ -1122,6 +1135,9 @@ function renderDet() {
 
   // Filas Incidencias
   const rowsInc = fuente==='mon' ? [] : RAW_INC_FILAS.filter(r=>{
+    // Excluir PROACTIVO y REPORTE del detalle de casos
+    const det=(r.detalle||'').toUpperCase().trim();
+    if(det==='PROACTIVO'||det==='REPORTE') return false;
     if(estado!=='all'){
       const ec=(r.estado||'').toUpperCase()==='CERRADO';
       if(estado==='cerrado'&&!ec) return false;
