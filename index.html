@@ -742,7 +742,7 @@ function getIncRowsFiltrados() {
 function calcIncDesdeFilas(filas, desde, hasta) {
   const SLA_KEYS = SLA_TIPO_ORDER;
   const acum = {};
-  SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
+  SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,cerrados:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
     const f = (r.fecha_reporte||'').substring(0,10);
     if(desde && f < desde) return;
@@ -750,18 +750,24 @@ function calcIncDesdeFilas(filas, desde, hasta) {
     const tKey = tipoIncKey(r);
     if(!acum[tKey]) return;
     acum[tKey].total++;
-    if((r.estado||'').toUpperCase()!=='CERRADO'){acum[tKey].abiertos++;return;}
-    const slaReal=parseDur(r.sla_texto||''), slaIdeal=SLA_IDEAL[tKey];
-    if(slaReal<=0) return;
-    acum[tKey].sumaHoras+=slaReal; acum[tKey].nHoras++;
-    if(slaReal<=slaIdeal)acum[tKey].cumple++;else acum[tKey].noCumple++;
+    const isCerrado = (r.estado||'').toUpperCase()==='CERRADO';
+    if(isCerrado) {
+      acum[tKey].cerrados++;
+      const slaReal=parseDur(r.sla_texto||''), slaIdeal=SLA_IDEAL[tKey];
+      if(slaReal>0) {
+        acum[tKey].sumaHoras+=slaReal; acum[tKey].nHoras++;
+        if(slaReal<=slaIdeal)acum[tKey].cumple++;else acum[tKey].noCumple++;
+      }
+    } else {
+      acum[tKey].abiertos++;
+    }
   });
   return SLA_KEYS.map(t=>{
-    const a=acum[t], cerrados=a.cumple+a.noCumple;
+    const a=acum[t], conSLA=a.cumple+a.noCumple;
     const tipoNombre=TIPO_MAP[t]||t;
-    return{tipo:tipoNombre,label:tipoNombre,total:a.total,cerrados,abiertos:a.abiertos,
+    return{tipoKey:t,tipo:tipoNombre,label:tipoNombre,total:a.total,cerrados:a.cerrados,abiertos:a.abiertos,
       cumple:a.cumple,noCumple:a.noCumple,slaIdeal:SLA_IDEAL[t],
-      slaPct:cerrados>0?Math.round((a.cumple/cerrados)*100):null,conTiempo:cerrados,
+      slaPct:conSLA>0?Math.round((a.cumple/conSLA)*100):null,conTiempo:conSLA,
       sumaHoras:a.sumaHoras,nHoras:a.nHoras};
   });
 }
@@ -882,8 +888,8 @@ function renderResumen() {
       const dur=parseDur(r['Duración']), cerr=norm(r['Estado']||'')==='cerrado';
       if(cerr&&dur>0&&ideal!==undefined){nM++;sumaM+=dur;if(dur<=ideal)cM++;}
     });
-    // Inc
-    const dI=incRows.find(d=>normTipoKey(d.tipo)===tKey);
+    // Inc: buscar directamente por tipoKey
+    const dI=incRows.find(d=>d.tipoKey===tKey);
     const totalI=dI?dI.total:0, cI=dI?dI.cumple:0, nI=dI?dI.conTiempo:0;
     // Mon total for this tipo (from already-filtered monRows)
     const monTipoTotal=monRows.filter(r=>normTipoKey(r['Motivo de solución']||'')===tKey).length;
