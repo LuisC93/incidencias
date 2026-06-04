@@ -575,13 +575,19 @@ function nav(id,btn) {
 }
 
 function setFecha(rango, btn) {
+  // Usar fecha LOCAL (no UTC) para evitar desfase de zona horaria
   const hoy = new Date();
-  const fmt = d => d.toISOString().split('T')[0];
-  let desde, hasta = fmt(hoy);
-  if (rango==='hoy')   { desde = fmt(hoy); }
-  else if (rango==='ayer')  { const a=new Date(hoy); a.setDate(a.getDate()-1); desde=fmt(a); hasta=fmt(a); }
-  else if (rango==='3dias') { const a=new Date(hoy); a.setDate(a.getDate()-2); desde=fmt(a); }
-  else if (rango==='semana'){ const a=new Date(hoy); a.setDate(a.getDate()-6); desde=fmt(a); }
+  const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${dd}`;
+  };
+  let desde = '', hasta = fmt(hoy);
+  if      (rango==='hoy')    { desde = fmt(hoy); }
+  else if (rango==='ayer')   { const a=new Date(hoy); a.setDate(a.getDate()-1); desde=fmt(a); hasta=fmt(a); }
+  else if (rango==='3dias')  { const a=new Date(hoy); a.setDate(a.getDate()-2); desde=fmt(a); }
+  else if (rango==='semana') { const a=new Date(hoy); a.setDate(a.getDate()-6); desde=fmt(a); }
   else { desde=''; hasta=''; }
   document.getElementById('f-desde').value = desde;
   document.getElementById('f-hasta').value = hasta;
@@ -606,9 +612,14 @@ function getFechaFiltroSection(prefix) {
 
 function setFechaSection(prefix, rango, btn) {
   const hoy = new Date();
-  const fmt = d => d.toISOString().split('T')[0];
+  const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${dd}`;
+  };
   let desde = '', hasta = fmt(hoy);
-  if (rango==='hoy')    { desde = fmt(hoy); }
+  if      (rango==='hoy')    { desde = fmt(hoy); }
   else if (rango==='ayer')   { const a=new Date(hoy); a.setDate(a.getDate()-1); desde=fmt(a); hasta=fmt(a); }
   else if (rango==='3dias')  { const a=new Date(hoy); a.setDate(a.getDate()-2); desde=fmt(a); }
   else if (rango==='semana') { const a=new Date(hoy); a.setDate(a.getDate()-6); desde=fmt(a); }
@@ -699,12 +710,12 @@ async function loadAll() {
                    : [];
     RAW_INC_FILAS = filasInc;
 
-    // Helper: determina si una fila cuenta como incidencia para SLA
-    // INCIDENCIA explícito, o detalle vacío (registros sin clasificar)
-    // Excluimos: PROACTIVO, REPORTE
+    // Helper: determina si una fila cuenta para SLA de incidencias
+    // Incluimos: INCIDENCIA, PROACTIVO (fallas eléctricas vienen así), detalle vacío
+    // Excluimos: solo REPORTE (son reportes de usuario sin incidencia real)
     function esIncidenciaSLA(r) {
       const d = (r.detalle||'').toUpperCase().trim();
-      return d === 'INCIDENCIA' || d === '';
+      return d !== 'REPORTE';
     }
 
     const SLA_KEYS = SLA_TIPO_ORDER;
@@ -817,10 +828,16 @@ function getMonRows() {
     const estadoNorm = norm(r['Estado']||'');
     if(estado==='cerrado' && estadoNorm!=='cerrado') return false;
     if(estado==='abierto' && estadoNorm==='cerrado') return false;
-    // Filtro de fecha robusto
+    // Filtro de fecha robusto con fallback a _orig
     if(!desde && !hasta) return true;
-    const f = parseFechaYMD(r['Fecha']);
-    if(!f) return !desde && !hasta; // sin fecha: excluir si hay filtro
+    let f = parseFechaYMD(r['Fecha']);
+    if(!f && r['_orig']) {
+      for(const v of Object.values(r['_orig'])) {
+        const p = parseFechaYMD(String(v));
+        if(p && p > '2020-01-01') { f = p; break; }
+      }
+    }
+    if(!f) return false;
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
     return true;
@@ -853,7 +870,15 @@ function getMonRowsFiltrados() {
   const {desde, hasta} = getFechaFiltro();
   return RAW_MON.filter(r => {
     if(!desde && !hasta) return true;
-    const f = parseFechaYMD(r['Fecha']);
+    // Intentar con Fecha normalizada, si no con _orig (cualquier valor que sea fecha)
+    let f = parseFechaYMD(r['Fecha']);
+    if(!f && r['_orig']) {
+      // Buscar en _orig el primer valor que parezca una fecha
+      for(const v of Object.values(r['_orig'])) {
+        const p = parseFechaYMD(String(v));
+        if(p && p > '2020-01-01') { f = p; break; }
+      }
+    }
     if(!f) return false;
     if(desde && f < desde) return false;
     if(hasta && f > hasta) return false;
@@ -874,9 +899,9 @@ function calcIncDesdeFilas(filas, desde, hasta) {
   const acum = {};
   SLA_KEYS.forEach(t => { acum[t] = {cumple:0,noCumple:0,cerrados:0,abiertos:0,total:0,sumaHoras:0,nHoras:0}; });
   filas.forEach(r => {
-    // Excluir PROACTIVO y REPORTE; incluir INCIDENCIA y detalle vacío
+    // Excluir solo REPORTE; incluir INCIDENCIA, PROACTIVO y detalle vacío
     const det = (r.detalle||'').toUpperCase().trim();
-    if (det === 'PROACTIVO' || det === 'REPORTE') return;
+    if (det === 'REPORTE') return;
     // fecha_reporte ya viene como YYYY-MM-DD, comparamos directamente
     const f = (r.fecha_reporte||'').substring(0,10);
     if(desde && f < desde) return;
@@ -1233,9 +1258,9 @@ function renderDet() {
 
   // Filas Incidencias
   const rowsInc = fuente==='mon' ? [] : RAW_INC_FILAS.filter(r=>{
-    // Excluir PROACTIVO y REPORTE del detalle de casos
+    // Excluir solo REPORTE del detalle de casos
     const det=(r.detalle||'').toUpperCase().trim();
-    if(det==='PROACTIVO'||det==='REPORTE') return false;
+    if(det==='REPORTE') return false;
     if(estado!=='all'){
       const ec=(r.estado||'').toUpperCase()==='CERRADO';
       if(estado==='cerrado'&&!ec) return false;
