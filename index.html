@@ -642,6 +642,17 @@ async function loadAll() {
       return b==='B1'||b==='B2';
     });
 
+    // DEBUG: mostrar las keys del primer registro de monitoreo en consola
+    if(RAW_MON.length > 0) {
+      console.log('🔍 RAW_MON keys:', Object.keys(RAW_MON[0]));
+      console.log('🔍 RAW_MON[0]:', RAW_MON[0]);
+    } else if((rMon.sla||[]).length > 0) {
+      console.log('🔍 SLA keys (sin filtro B1/B2):', Object.keys(rMon.sla[0]));
+      console.log('🔍 SLA[0]:', rMon.sla[0]);
+    } else {
+      console.log('🔍 rMon completo:', JSON.stringify(rMon).substring(0,500));
+    }
+
     // Incidencias: el script devuelve { filas: [...], tipos: [...], ... }
     // o directamente un array (compatibilidad). Extraemos las filas correctamente.
     const filasInc = Array.isArray(rInc) ? rInc
