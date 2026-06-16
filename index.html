@@ -369,6 +369,14 @@ canvas { width:100%!important; }
             <option value="mon">Monitoreo</option>
             <option value="inc">Incidencias</option>
           </select>
+          <label>Zona</label>
+          <select id="d-zona" onchange="renderDet()">
+            <option value="all">Todas</option>
+            <option value="Principal">Principal</option>
+            <option value="Central">Central</option>
+            <option value="Occidental">Occidental</option>
+            <option value="Oriental">Oriental</option>
+          </select>
           <label>Monitor</label>
           <select id="d-monitor" onchange="renderDet()"><option value="all">Todos</option></select>
           <label>Tipo</label>
@@ -1358,6 +1366,7 @@ function renderDet() {
   const tipo    = document.getElementById('d-tipo')?.value||'all';
   const estado  = document.getElementById('d-estado')?.value||'all';
   const fuente  = document.getElementById('d-fuente')?.value||'all';
+  const zona    = document.getElementById('d-zona')?.value||'all';
   const codBusq = (document.getElementById('d-cod')?.value||'').trim().toLowerCase();
   const {desde, hasta} = getFechaFiltroSection('d');
 
@@ -1365,6 +1374,7 @@ function renderDet() {
   const rowsMon = fuente==='inc' ? [] : RAW_MON.filter(r=>{
     const b=(r['Bloque']||'').trim();
     if(bloque!=='all'&&b!==bloque) return false;
+    if(zona!=='all'&&(r['_zona']||'Principal')!==zona) return false;
     if(monitor!=='all'&&(r['Monitor']||'').trim()!==monitor) return false;
     if(tipo!=='all'&&normTipoKey(r['Motivo de solución']||'')!==normTipoKey(tipo)) return false;
     const estadoNormD = norm(r['Estado']||'');
@@ -1377,7 +1387,8 @@ function renderDet() {
     if(hasta && f>hasta) return false;
     return true;
   }).map(r=>({
-    _src:'mon', fecha:fmtFecha(r['Fecha']),
+    _src:'mon', _zona:r['_zona']||'Principal',
+    fecha:fmtFecha(r['Fecha']),
     monitor:r['Monitor']||'—', cod:String(r['COD']||'—'),
     bloque:(r['Bloque']||'—').trim(),
     tipo:r['Motivo de solución']||'—',    desc:r['Descripción']||'—',
@@ -1437,8 +1448,9 @@ function renderDet() {
     if(r.cerrado&&r.dur>0&&ideal!==undefined) slaTag=r.dur<=ideal?'<span class="badge ok">✓ Cumple</span>':'<span class="badge bad">✗ Fuera</span>';
     else if(!r.cerrado) slaTag='<span class="badge warn">Abierto</span>';
     const blq=r.bloque;
+    const zonaLabel = r._zona && r._zona !== 'Principal' ? ' ' + r._zona : '';
     const fuenteTag=r._src==='mon'
-      ?'<span class="badge mon" style="font-size:9px">MON</span>'
+      ?`<span class="badge mon" style="font-size:9px">MON${zonaLabel}</span>`
       :'<span class="badge inc" style="font-size:9px">INC</span>';
     html+=`<tr>
       <td>${fuenteTag}</td>
