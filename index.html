@@ -221,7 +221,7 @@ canvas { width:100%!important; }
     Detalle casos
   </button>
   <div class="sidebar-footer">
-    <div class="src-pill mon"><div class="dot"></div>Monitoreo (hoja SLA)</div>
+    <div class="src-pill mon"><div class="dot"></div>Monitoreo — Todas las zonas</div>
     <div class="src-pill inc"><div class="dot"></div>Incidencias (Script)</div>
   </div>
 </aside>
@@ -390,6 +390,13 @@ canvas { width:100%!important; }
 <script>
 const URL_MON = 'https://script.google.com/macros/s/AKfycbzYkS6QUFYIQNHzLQLmKZ85ccfMYWXNPrvsw0dKX62k33c0IGVHD64ybDo2z8SSbzOWJA/exec';
 const URL_INC = 'https://script.google.com/macros/s/AKfycbx3FbzfNY9Cnqy6U5wjEobSApFRX9WC9Y__ZUFfihNdoQnQzjLz5IakqTxP84KTCPY/exec?action=data';
+
+// ── NUEVAS ZONAS DE MONITOREO ──────────────────────────────────────────────
+// Pegar aquí las URLs de los Google Apps Script de cada zona.
+// Si una zona aún no tiene script, dejar la cadena vacía ''.
+const URL_MON_CENTRAL    = 'https://script.google.com/macros/s/AKfycbypuup4QVbXY90teWxEy98jOEQmkT-71nG4GAIpGz0JZCfvzfZ8OqPs33BkrcydbB-2/exec'; // ← Zona Central   (spreadsheet: 172Baj1Yprcw4VykjazFV_x6mIJGpEiGPr4mfOKm-ub8)
+const URL_MON_OCCIDENTAL = 'https://script.google.com/macros/s/AKfycbyj2-bEkZ-Q7LK7mqV5k4hcLEH4oKNTiFMxoBTLIDXGboQRFeI9J8Ms1kRDsaIa1R12HQ/exec'; // ← Zona Occidental (spreadsheet: 1iGJ7dsW2gp9pS0t0F5oBihFplPBA_foDCqb4cV-AlSo)
+const URL_MON_ORIENTAL   = 'https://script.google.com/macros/s/AKfycbxcQvNp6YAu8T8Abiokt9fs7zuXbvyHzZmmK6dkBCVHfIucRHT--u6FHK6JZuSkeedUvg/exec'; // ← Zona Oriental   (spreadsheet: 1ntAhFgYEUZxHkNxYj4SEGOuNycYFijj4W5es0OwFNag)
 
 const SLA_IDEAL = {
   'apoyo a usuario':3,
@@ -702,60 +709,70 @@ async function loadAll() {
       return JSON.parse(text);
     }
 
-    const [rMon, rInc] = await Promise.all([
-      fetchJSON(URL_MON),
+    // ── CARGA MÚLTIPLES FUENTES MON EN PARALELO ──────────────────────────────
+    // Construir lista de URLs activas (ignorar las vacías)
+    const _urlsMon = [
+      { url: URL_MON,            zona: 'Principal'  },
+      { url: URL_MON_CENTRAL,    zona: 'Central'    },
+      { url: URL_MON_OCCIDENTAL, zona: 'Occidental' },
+      { url: URL_MON_ORIENTAL,   zona: 'Oriental'   },
+    ].filter(e => e.url && e.url.trim() !== '');
+
+    const [monResults, rInc] = await Promise.all([
+      Promise.allSettled(_urlsMon.map(e => fetchJSON(e.url))),
       fetchJSON(URL_INC).catch(()=>({tipos:[]}))
     ]);
 
-    // Monitoreo: solo B1 y B2
-    RAW_MON = (rMon.sla||[]).filter(r=>{
-      const b=(r['Bloque']||'').trim();
-      return b==='B1'||b==='B2';
+    // Combinar todas las zonas en un solo RAW_MON
+    let _allMonRows = [];
+    let _erroresMon = [];
+    monResults.forEach((res, i) => {
+      const zona = _urlsMon[i].zona;
+      if(res.status === 'fulfilled') {
+        const filas = (res.value.sla || []).map(r => ({...r, _zona: zona}));
+        _allMonRows = _allMonRows.concat(filas);
+        console.log(`✅ MON ${zona}: ${filas.length} registros`);
+      } else {
+        _erroresMon.push(zona);
+        console.warn(`⚠️ Error MON ${zona}:`, res.reason?.message || res.reason);
+      }
     });
 
-    // DEBUG: mostrar headers reales recibidos del GS
-    if(rMon._sla_headers_orig) {
-      console.log('📋 Headers ORIGINALES hoja SLA:', rMon._sla_headers_orig);
+    // rMon apunta a la primera fuente exitosa (para compatibilidad con debug)
+    const _primerExito = monResults.find(r => r.status === 'fulfilled');
+    const rMon = _primerExito ? _primerExito.value : { sla: [] };
+
+    // RAW_MON = todos los registros de todas las zonas (sin filtro de bloque;
+    // el filtrado por Bloque queda disponible en la UI de Detalle)
+    RAW_MON = _allMonRows;
+
+    // Mostrar errores de carga si los hay
+    if(_erroresMon.length > 0 && _allMonRows.length === 0) {
+      document.getElementById('m-cards').innerHTML =
+        `<div class="err" style="grid-column:1/-1">
+          ❌ No se pudo cargar ninguna fuente de Monitoreo.<br>
+          Zonas con error: <b>${_erroresMon.join(', ')}</b>
+        </div>`;
+    } else if(_erroresMon.length > 0) {
+      console.warn('⚠️ Zonas con error (datos parciales):', _erroresMon.join(', '));
     }
-    if(rMon._muestra) {
-      console.log('📋 Primera fila RAW de SLA:', rMon._muestra);
-    }
+
+    // DEBUG
     if(RAW_MON.length > 0) {
-      console.log('✅ RAW_MON keys:', Object.keys(RAW_MON[0]));
-      // Mostrar muestra de fechas para diagnóstico
+      console.log(`📊 RAW_MON total: ${RAW_MON.length} registros de ${_urlsMon.length - _erroresMon.length} zona(s)`);
       const muestraFechas = RAW_MON.slice(0,5).map(r=>r['Fecha']||'(vacío)');
-      console.log('📅 Muestra de fechas RAW en Monitoreo:', muestraFechas);
-      console.log('📅 Fechas parseadas:', muestraFechas.map(f=>parseFechaYMD(f)));
+      console.log('📅 Muestra de fechas:', muestraFechas);
       const sinFecha = RAW_MON.filter(r=>!r['Fecha']).length;
       if(sinFecha === RAW_MON.length) {
-        // Todos sin fecha — mostrar qué llegó realmente
-        const keysReales = Object.keys(RAW_MON[0]).filter(k=>k!=='_orig').join(', ');
         const origKeys = rMon._sla_headers_orig ? rMon._sla_headers_orig.join(', ') : '?';
         document.getElementById('m-cards').innerHTML =
           `<div class="err" style="grid-column:1/-1;font-size:12px">
             ⚠️ El campo <b>"Fecha"</b> no se encontró en los datos de Monitoreo.<br>
-            <b>Headers originales de tu hoja SLA:</b><br>
-            <code style="color:#f59e0b">${origKeys}</code><br><br>
-            Dile a Claude cuáles de esas columnas son: Fecha, Bloque, Estado, Duración, Tipo.
+            <b>Headers originales hoja SLA:</b><br>
+            <code style="color:#f59e0b">${origKeys}</code>
           </div>`;
       }
-    } else if((rMon.sla||[]).length > 0) {
-      const origKeys = rMon._sla_headers_orig ? rMon._sla_headers_orig.join(', ') : Object.keys(rMon.sla[0]).join(', ');
-      const bloqueVal = rMon._muestra ? (rMon._muestra['Bloque'] || Object.values(rMon._muestra).slice(0,5).join(' | ')) : '?';
-      document.getElementById('m-cards').innerHTML =
-        `<div class="err" style="grid-column:1/-1;font-size:12px">
-          ⚠️ Hay ${rMon.sla.length} registros pero ninguno tiene Bloque "B1" o "B2".<br>
-          <b>Headers de tu hoja SLA:</b><br>
-          <code style="color:#f59e0b">${origKeys}</code><br>
-          <b>Valor en columna Bloque:</b> "${bloqueVal}"
-        </div>`;
-    } else if(rMon.error) {
-      document.getElementById('m-cards').innerHTML =
-        `<div class="err" style="grid-column:1/-1">
-          ❌ Error en el GS: <b>${rMon.error}</b><br>
-          ${rMon.stack ? `<small>${rMon.stack.substring(0,200)}</small>` : ''}
-        </div>`;
-    } else {
+    } else if(!_erroresMon.length) {
       document.getElementById('m-cards').innerHTML =
         `<div class="err" style="grid-column:1/-1">
           ❌ No llegaron datos de Monitoreo.<br>
@@ -769,6 +786,12 @@ async function loadAll() {
                    : Array.isArray(rInc.filas) ? rInc.filas
                    : [];
     RAW_INC_FILAS = filasInc;
+
+    // DEBUG: mostrar estructura de primer registro
+    if(filasInc.length > 0) {
+      console.log('📊 Primer registro de incidencias:', filasInc[0]);
+      console.log('🔑 Campos disponibles:', Object.keys(filasInc[0]));
+    }
 
     // Helper: determina si una fila cuenta para SLA de incidencias
     // Incluimos: INCIDENCIA, PROACTIVO (fallas eléctricas vienen así), detalle vacío
