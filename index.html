@@ -394,9 +394,9 @@ const URL_INC = 'https://script.google.com/macros/s/AKfycbx3FbzfNY9Cnqy6U5wjEobS
 // ── NUEVAS ZONAS DE MONITOREO ──────────────────────────────────────────────
 // Pegar aquí las URLs de los Google Apps Script de cada zona.
 // Si una zona aún no tiene script, dejar la cadena vacía ''.
-const URL_MON_CENTRAL    = 'https://script.google.com/macros/s/AKfycbypuup4QVbXY90teWxEy98jOEQmkT-71nG4GAIpGz0JZCfvzfZ8OqPs33BkrcydbB-2/exec'; // ← Zona Central   (spreadsheet: 172Baj1Yprcw4VykjazFV_x6mIJGpEiGPr4mfOKm-ub8)
-const URL_MON_OCCIDENTAL = 'https://script.google.com/macros/s/AKfycbyj2-bEkZ-Q7LK7mqV5k4hcLEH4oKNTiFMxoBTLIDXGboQRFeI9J8Ms1kRDsaIa1R12HQ/exec'; // ← Zona Occidental (spreadsheet: 1iGJ7dsW2gp9pS0t0F5oBihFplPBA_foDCqb4cV-AlSo)
-const URL_MON_ORIENTAL   = 'https://script.google.com/macros/s/AKfycbxcQvNp6YAu8T8Abiokt9fs7zuXbvyHzZmmK6dkBCVHfIucRHT--u6FHK6JZuSkeedUvg/exec'; // ← Zona Oriental   (spreadsheet: 1ntAhFgYEUZxHkNxYj4SEGOuNycYFijj4W5es0OwFNag)
+const URL_MON_CENTRAL    = 'https://script.google.com/macros/s/AKfycbypuup4QVbXY90teWxEy98jOEQmkT-71nG4GAIpGz0JZCfvzfZ8OqPs33BkrcydbB-2/exec'; // Zona Central
+const URL_MON_OCCIDENTAL = 'https://script.google.com/macros/s/AKfycbyj2-bEkZ-Q7LK7mqV5k4hcLEH4oKNTiFMxoBTLIDXGboQRFeI9J8Ms1kRDsaIa1R12HQ/exec'; // Zona Occidental
+const URL_MON_ORIENTAL   = 'https://script.google.com/macros/s/AKfycbxcQvNp6YAu8T8Abiokt9fs7zuXbvyHzZmmK6dkBCVHfIucRHT--u6FHK6JZuSkeedUvg/exec'; // Zona Oriental
 
 const SLA_IDEAL = {
   'apoyo a usuario':3,
@@ -742,9 +742,11 @@ async function loadAll() {
     const _primerExito = monResults.find(r => r.status === 'fulfilled');
     const rMon = _primerExito ? _primerExito.value : { sla: [] };
 
-    // RAW_MON = todos los registros de todas las zonas (sin filtro de bloque;
-    // el filtrado por Bloque queda disponible en la UI de Detalle)
-    RAW_MON = _allMonRows;
+    // RAW_MON = solo B1 y B2 de todas las zonas combinadas
+    RAW_MON = _allMonRows.filter(r => {
+      const b = (r['Bloque'] || '').trim();
+      return b === 'B1' || b === 'B2';
+    });
 
     // Mostrar errores de carga si los hay
     if(_erroresMon.length > 0 && _allMonRows.length === 0) {
